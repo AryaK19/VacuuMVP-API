@@ -1,0 +1,99 @@
+DB VacuuMVP
+
+
+1) users
+	id
+	user_id ( supabase user auth id) 
+	role_id
+	name 
+	phone_number
+	created_at
+	updated_at
+
+
+2) role
+	id
+	role_name (admin, distributer)
+	created_at
+	updated_at
+
+
+3) type
+	id
+	type (initially we have pumps, parts) 
+	created_at
+	updated_at
+
+4) service_types
+	id 
+	service_type (varchar) ( Paid, Health Check, Warranty, AMC ) 
+
+5) service_report 
+	id
+	user_id (users.id)
+	machine_id
+	
+	problem
+	solution
+	service_person_name
+	service_type_id
+		
+	
+	created_at
+	updated_at
+
+
+	
+
+	
+6) service_report_parts
+	service_report_id
+	machine_id (here type= part)
+
+	quantity ** 
+	
+
+7) files
+	id 
+	service_report_id
+	file_key
+
+
+
+
+8) machines
+	id
+	serial_no
+
+
+	model_no (varchar) 
+	part_no 
+
+	type_id
+	
+	created_at
+	updated_at
+
+	file_key ** 
+
+
+
+9) sold_machines
+	id
+	user_id **
+
+	machine_id (machines.id)
+	date_of_manufacturing (year/month) 
+
+
+	customer_name
+	customer_contact
+	customer_email
+	customer_address
+	
+
+
+
+
+
+
