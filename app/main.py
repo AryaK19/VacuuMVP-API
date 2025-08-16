@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from app.db.session import get_db, engine, SessionLocal
 from app.db import models
-from app.routers import auth, machines
+from app.routers import auth, machines, users
 from app.middleware.auth import auth_middleware
 
 # Load environment variables
@@ -60,6 +60,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(machines.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 
 # Root endpoint
 @app.get("/")
