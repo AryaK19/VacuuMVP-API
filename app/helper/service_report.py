@@ -298,3 +298,81 @@ async def get_machine_by_serial_no(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve machine information: {str(e)}"
         )
+
+async def create_customer_record(
+    customer_data: Dict[str, Any],
+    user_id: str,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Helper function to create a sold machine record with customer details
+    """
+    try:
+        # Validate machine exists
+        machine = db.query(models.Machine).filter(
+            models.Machine.id == customer_data["machine_id"]
+        ).first()
+        
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Machine not found"
+            )
+
+        # Check if machine is already sold
+        existing_sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.machine_id == customer_data["machine_id"]
+        ).first()
+        
+        if existing_sold_machine:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Machine is already sold to another customer"
+            )
+
+        # Create sold machine record
+        new_sold_machine = models.SoldMachine(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            machine_id=customer_data["machine_id"],
+            date_of_manufacturing=customer_data.get("date_of_manufacturing"),
+            customer_name=customer_data["customer_name"],
+            customer_contact=customer_data.get("customer_contact"),
+            customer_email=customer_data.get("customer_email"),
+            customer_address=customer_data.get("customer_address")
+        )
+
+        db.add(new_sold_machine)
+        db.commit()
+        db.refresh(new_sold_machine)
+
+        return {
+            "success": True,
+            "message": "Customer record created successfully",
+            "sold_machine": {
+                "id": str(new_sold_machine.id),
+                "user_id": str(new_sold_machine.user_id),
+                "machine_id": str(new_sold_machine.machine_id),
+                "date_of_manufacturing": new_sold_machine.date_of_manufacturing,
+                "customer_name": new_sold_machine.customer_name,
+                "customer_contact": new_sold_machine.customer_contact,
+                "customer_email": new_sold_machine.customer_email,
+                "customer_address": new_sold_machine.customer_address,
+                "created_at": new_sold_machine.created_at,
+                "updated_at": new_sold_machine.updated_at,
+                "machine": {
+                    "serial_no": machine.serial_no,
+                    "model_no": machine.model_no,
+                    "part_no": machine.part_no
+                }
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create customer record: {str(e)}"
+        )

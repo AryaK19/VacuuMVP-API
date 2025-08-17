@@ -4,11 +4,11 @@ from typing import Optional, Any, List
 import json
 from app.db import models
 from app.db.session import get_db
-from app.schema.service_report import ServiceReportCreateResponse, PaginatedServiceReportResponse
+from app.schema.service_report import ServiceReportCreateResponse, PaginatedServiceReportResponse, SoldMachineCreateRequest, SoldMachineCreateResponse
 from app.middleware.auth import require_any_role, get_current_user
-from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no
+from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no, create_customer_record
 from app.db.models import User
-from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE
+from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE, SERVICE_REPORT_CUSTOMER
 
 router = APIRouter(tags=["Service Reports"])
 
@@ -130,6 +130,22 @@ async def get_machine_info_by_serial(
     """
     return await get_machine_by_serial_no(
         serial_no=serial_no,
+        db=db
+    )
+
+@router.post(SERVICE_REPORT_CUSTOMER, response_model=SoldMachineCreateResponse)
+async def create_customer_record_endpoint(
+    customer_data: SoldMachineCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_any_role)
+):
+    """
+    Create a customer record by adding machine to sold_machines table.
+    Accessible by admin and distributer users.
+    """
+    return await create_customer_record(
+        customer_data=customer_data.dict(),
+        user_id=str(current_user.id),
         db=db
     )
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Union
-from datetime import datetime
+from datetime import datetime, date
 import uuid
 
 class ServiceReportPartBase(BaseModel):
@@ -75,3 +75,19 @@ class PaginatedServiceReportResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda v: str(v)
         }
+
+class SoldMachineCreateRequest(BaseModel):
+    machine_id: str
+    date_of_manufacturing: Optional[date] = None
+    customer_name: str
+    customer_contact: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_address: Optional[str] = None
+
+class SoldMachineCreateResponse(BaseModel):
+    success: bool
+    message: str
+    sold_machine: Dict[str, Any]
+
+    class Config:
+        orm_mode = True
