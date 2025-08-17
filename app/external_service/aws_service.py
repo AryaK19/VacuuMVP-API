@@ -91,7 +91,7 @@ class AWSService:
     def upload_file(
         self, 
         file, 
-        service_report_id: str,
+        folder: str,
         content_type: str = None,
         file_name: str = None
     ) -> Dict[str, Any]:
@@ -100,7 +100,7 @@ class AWSService:
         
         Args:
             file: File-like object or path to a file
-            service_report_id: ID of the service report this file belongs to
+            folder: Folder path in S3 where the file will be uploaded
             content_type: Optional MIME type of the file
             file_name: Optional custom name for the file
             
@@ -122,7 +122,7 @@ class AWSService:
                 file_name = f"file-{unique_id}"
                 
             # Create S3 path: service_reports/[report_id]/[timestamp]_[filename]
-            file_key = f"service_reports/{service_report_id}/{timestamp}_{file_name}"
+            file_key = f"{folder}/{timestamp}_{file_name}"
             
             # If file is a path string, open and upload
             if isinstance(file, str):
@@ -153,7 +153,7 @@ class AWSService:
                 "success": True,
                 "file_key": file_key,
                 "url": url,
-                "service_report_id": service_report_id
+                "folder": folder
             }
             
         except ClientError as e:

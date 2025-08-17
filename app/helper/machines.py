@@ -2,8 +2,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 from typing import Optional, Dict, Any
+import uuid
 
 from app.db import models
+from app.external_service.aws_service import AWSService
 
 
 async def get_machines_by_type(
@@ -110,3 +112,99 @@ async def get_machines_by_type(
         "has_previous": has_previous,
         "items": result_machines
     }
+
+
+async def create_machine_by_type(
+    type_name: str,
+    machine_data: Dict[str, Any],
+    db: Session,
+    file = None
+) -> Dict[str, Any]:
+    """
+    Helper function to create a machine with specific type and optional file upload
+    """
+    # Get the type_id for the given type_name
+    type_obj = db.query(models.Type).filter(models.Type.type == type_name).first()
+    if not type_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Type '{type_name}' not found"
+        )
+
+    # Check if machine with same serial number already exists
+    existing_machine = db.query(models.Machine).filter(
+        models.Machine.serial_no == machine_data["serial_no"]
+    ).first()
+    
+    if existing_machine:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Machine with serial number '{machine_data['serial_no']}' already exists"
+        )
+
+    file_key = None
+    
+    # Handle file upload if file is provided
+    if file:
+        try:
+            aws_service = AWSService()
+            
+            # Upload file to S3 using machine serial number as a unique identifier
+            upload_result = aws_service.upload_file(
+                file=file.file,
+                folder=f"machines/{machine_data['serial_no']}",
+                content_type=file.content_type,
+                file_name=file.filename
+            )
+            
+            if not upload_result["success"]:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"File upload failed: {upload_result.get('message', 'Unknown error')}"
+                )
+            
+            file_key = upload_result["file_key"]
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"File upload failed: {str(e)}"
+            )
+
+    # Create new machine
+    new_machine = models.Machine(
+        id=uuid.uuid4(),
+        serial_no=machine_data["serial_no"],
+        model_no=machine_data["model_no"],
+        part_no=machine_data.get("part_no"),
+        type_id=type_obj.id,
+        file_key=file_key or machine_data.get("file_key")
+    )
+    
+    try:
+        db.add(new_machine)
+        db.commit()
+        db.refresh(new_machine)
+        
+        return {
+            "success": True,
+            "message": f"{type_name.capitalize()} created successfully",
+            "machine": {
+                "id": str(new_machine.id),
+                "serial_no": new_machine.serial_no,
+                "model_no": new_machine.model_no,
+                "part_no": new_machine.part_no,
+                "type_id": str(new_machine.type_id),
+                "file_key": new_machine.file_key,
+                "type": type_name,
+                "created_at": new_machine.created_at,
+                "updated_at": new_machine.updated_at
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create {type_name}: {str(e)}"
+        )

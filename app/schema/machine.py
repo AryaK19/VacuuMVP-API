@@ -16,7 +16,22 @@ class SoldMachineBase(BaseModel):
     customer_address: Optional[str] = None
 
 class MachineCreate(MachineBase):
-    type_id: str
+    file_key: Optional[str] = None  # Added file_key for machine creation
+
+class MachineCreateRequest(BaseModel):
+    serial_no: str
+    model_no: str
+    part_no: Optional[str] = None
+    file_key: Optional[str] = None
+
+class MachineCreateResponse(BaseModel):
+    success: bool
+    message: str
+    machine: Dict[str, Any]
+    file_uploaded: Optional[bool] = False
+
+    class Config:
+        orm_mode = True
 
 class SoldMachineCreate(SoldMachineBase):
     machine_id: str

@@ -58,6 +58,7 @@ class Machine(Base):
     model_no = Column(String(100), nullable=False)
     part_no = Column(String(100))
     type_id = Column(UUID(as_uuid=True), ForeignKey("type.id"))
+    file_key = Column(String(255))  # Added file_key field
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -74,6 +75,7 @@ class SoldMachine(Base):
     __tablename__ = "sold_machines"
     
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Added user_id field
     machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"), nullable=False)
     date_of_manufacturing = Column(Date)
     customer_name = Column(String(255))
@@ -84,7 +86,9 @@ class SoldMachine(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
+    user = relationship("User", back_populates="sold_machines")  # Added relationship to User
     machine = relationship("Machine", back_populates="sold_info")
+    service_reports = relationship("ServiceReport", back_populates="sold_machine")  # Added relationship to ServiceReport
     
     def __repr__(self):
         return f"<SoldMachine {self.id}>"
@@ -107,6 +111,7 @@ class User(Base):
     # Relationships
     role = relationship("Role", back_populates="users")
     service_reports = relationship("ServiceReport", back_populates="user")
+    sold_machines = relationship("SoldMachine", back_populates="user")  # Added relationship to SoldMachine
     
     def __repr__(self):
         return f"<User {self.email}>"
@@ -117,7 +122,8 @@ class ServiceReport(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"))
+    machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"))  # Added machine_id back
+    sold_machines_id = Column(UUID(as_uuid=True), ForeignKey("sold_machines.id"))  # Kept for backward compatibility
     service_type_id = Column(UUID(as_uuid=True), ForeignKey("service_types.id"))
     problem = Column(Text)
     solution = Column(Text)
@@ -127,7 +133,8 @@ class ServiceReport(Base):
     
     # Relationships
     user = relationship("User", back_populates="service_reports")
-    machine = relationship("Machine", back_populates="service_reports")
+    machine = relationship("Machine", back_populates="service_reports")  # Added relationship to Machine
+    sold_machine = relationship("SoldMachine", back_populates="service_reports")  # Added relationship to SoldMachine
     service_type = relationship("ServiceType", back_populates="service_reports")
     parts = relationship("ServiceReportPart", back_populates="service_report")
     files = relationship("File", back_populates="service_report")
@@ -141,7 +148,8 @@ class ServiceReportPart(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     service_report_id = Column(UUID(as_uuid=True), ForeignKey("service_report.id"))
-    machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"))  # This is for parts (type='part')
+    machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"))
+    quantity = Column(Integer, default=1)  # Added quantity field
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -151,7 +159,6 @@ class ServiceReportPart(Base):
     
     def __repr__(self):
         return f"<ServiceReportPart {self.id}>"
-    # Additional methods and properties can be defined here
 
 class File(Base):
     __tablename__ = "files"

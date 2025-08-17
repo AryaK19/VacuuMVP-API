@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from typing import Optional, Any
 
 from app.db.session import get_db
-from app.schema.machine import PaginatedMachineResponse
+from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse
 from app.middleware.auth import require_admin
-from app.helper.machines import get_machines_by_type
+from app.helper.machines import get_machines_by_type, create_machine_by_type
 
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART
 
 router = APIRouter(tags=["Machines"])
 
@@ -57,5 +57,57 @@ async def get_parts(
         sort_order=sort_order, 
         page=page, 
         limit=limit
+    )
+
+@router.post(MACHINES_CREATE_PUMP, response_model=MachineCreateResponse)
+async def create_pump(
+    serial_no: str = Form(...),
+    model_no: str = Form(...),
+    part_no: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Create a new pump machine with optional file upload.
+    Only accessible by admin users.
+    """
+    machine_data = {
+        "serial_no": serial_no,
+        "model_no": model_no,
+        "part_no": part_no
+    }
+    
+    return await create_machine_by_type(
+        type_name="pump",
+        machine_data=machine_data,
+        db=db,
+        file=file
+    )
+
+@router.post(MACHINES_CREATE_PART, response_model=MachineCreateResponse)
+async def create_part(
+    serial_no: str = Form(...),
+    model_no: str = Form(...),
+    part_no: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Create a new part machine with optional file upload.
+    Only accessible by admin users.
+    """
+    machine_data = {
+        "serial_no": serial_no,
+        "model_no": model_no,
+        "part_no": part_no
+    }
+    
+    return await create_machine_by_type(
+        type_name="part",
+        machine_data=machine_data,
+        db=db,
+        file=file
     )
 
