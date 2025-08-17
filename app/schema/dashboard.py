@@ -40,6 +40,20 @@ class DashboardStatsResponse(BaseModel):
     class Config:
         orm_mode = True
 
+# Service Type Statistics Schema
+class ServiceTypeStatsItem(BaseModel):
+    service_type: str
+    count: int
+
+    class Config:
+        orm_mode = True
+
+class ServiceTypeStatsResponse(BaseModel):
+    service_types: List[ServiceTypeStatsItem]
+
+    class Config:
+        orm_mode = True
+
 # File information for service reports
 class ServiceReportFileInfo(BaseModel):
     id: Union[str, uuid.UUID]

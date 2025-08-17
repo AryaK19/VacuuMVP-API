@@ -5,9 +5,9 @@ from typing import Optional, Any
 from io import BytesIO
 
 from app.db.session import get_db
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse
 from app.middleware.auth import require_any_role
-from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics
+from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics, get_service_type_statistics
 from app.external_service.pdf_service import PDFService
 
 router = APIRouter(tags=["Dashboard"])
@@ -26,6 +26,21 @@ async def get_dashboard_stats(
     """
     try:
         return await get_dashboard_statistics(db=db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/service-type-statistics", response_model=ServiceTypeStatsResponse)
+async def get_service_type_stats(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get service type statistics for bar chart.
+    Returns count of service reports for each service type.
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_service_type_statistics(db=db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -13,7 +13,9 @@ from app.schema.dashboard import (
     ServiceReportPartInfo,
     ServiceReportMachineInfo,
     ServiceReportCustomerInfo,
-    DashboardStatsResponse
+    DashboardStatsResponse,
+    ServiceTypeStatsResponse,
+    ServiceTypeStatsItem
 )
 from app.external_service.aws_service import AWSService
 
@@ -54,6 +56,46 @@ async def get_dashboard_statistics(db: Session) -> DashboardStatsResponse:
     except Exception as e:
         print(f"Dashboard statistics error: {str(e)}")
         raise Exception(f"Error fetching dashboard statistics: {str(e)}")
+
+async def get_service_type_statistics(db: Session) -> ServiceTypeStatsResponse:
+    """
+    Get service type statistics for bar chart.
+    """
+    try:
+        # Define the service types we want to track
+        expected_service_types = ['Warranty', 'AMC', 'Paid', 'Installation', 'Health Check']
+        
+        # Get counts for each service type from service reports
+        service_type_counts = db.query(
+            ServiceType.service_type,
+            func.count(ServiceReport.id).label('count')
+        ).outerjoin(ServiceReport, ServiceReport.service_type_id == ServiceType.id)\
+         .group_by(ServiceType.service_type)\
+         .all()
+        
+        # Create a dictionary for quick lookup
+        counts_dict = {service_type: count for service_type, count in service_type_counts}
+        
+        # Ensure all expected service types are included, even if count is 0
+        service_type_stats = []
+        for service_type in expected_service_types:
+            # Check for exact match first, then case-insensitive match
+            count = 0
+            for db_service_type, db_count in counts_dict.items():
+                if db_service_type and db_service_type.lower() == service_type.lower():
+                    count = db_count
+                    break
+            
+            service_type_stats.append(ServiceTypeStatsItem(
+                service_type=service_type,
+                count=count
+            ))
+        
+        return ServiceTypeStatsResponse(service_types=service_type_stats)
+        
+    except Exception as e:
+        print(f"Service type statistics error: {str(e)}")
+        raise Exception(f"Error fetching service type statistics: {str(e)}")
 
 async def get_recent_activities(
     db: Session,
