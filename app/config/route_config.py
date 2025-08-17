@@ -11,6 +11,7 @@ MACHINES_CREATE_PART = '/machines/parts/create'
 MACHINE_DETAILS = '/machines/details/{id}'
 MACHINE_SERVICE_REPORTS = '/machines/{id}/service-reports'
 MACHINE_DELETE = '/machines/{id}/delete'
+MACHINE_UPDATE = '/machines/{id}/update'
 
 
 USERS_ADMINS = '/users/admins'

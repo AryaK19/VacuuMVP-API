@@ -463,5 +463,139 @@ async def delete_machine(
             detail=f"Failed to delete machine: {str(e)}"
         )
 
+async def update_machine_details(
+    machine_id: str,
+    machine_data: Dict[str, Any],
+    db: Session,
+    file = None
+) -> Dict[str, Any]:
+    """
+    Helper function to update comprehensive machine details including customer info and file
+    """
+    try:
+        # Get machine by ID
+        machine = db.query(models.Machine).filter(
+            models.Machine.id == machine_id
+        ).first()
+        
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Machine with ID '{machine_id}' not found"
+            )
+
+        # Get sold machine info if available
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.machine_id == machine.id
+        ).first()
+
+        # Handle file upload/replacement
+        new_file_key = None
+        if file:
+            try:
+                aws_service = AWSService()
+                
+                # Delete old file if exists
+                if machine.file_key:
+                    delete_result = aws_service.delete_file(machine.file_key)
+                    print(f"Old file deletion result: {delete_result}")
+                
+                # Upload new file
+                upload_result = aws_service.upload_file(
+                    file=file.file,
+                    folder=f"machines/{machine.serial_no}",
+                    content_type=file.content_type,
+                    file_name=file.filename
+                )
+                
+                if upload_result["success"]:
+                    new_file_key = upload_result["file_key"]
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"File upload failed: {upload_result.get('message', 'Unknown error')}"
+                    )
+                    
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"File upload failed: {str(e)}"
+                )
+
+        # Update machine details
+        update_fields = {}
+        if machine_data.get("serial_no") is not None:
+            # Check if new serial number already exists (excluding current machine)
+            existing_machine = db.query(models.Machine).filter(
+                models.Machine.serial_no == machine_data["serial_no"],
+                models.Machine.id != machine_id
+            ).first()
+            
+            if existing_machine:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Machine with serial number '{machine_data['serial_no']}' already exists"
+                )
+            update_fields["serial_no"] = machine_data["serial_no"]
+            
+        if machine_data.get("model_no") is not None:
+            update_fields["model_no"] = machine_data["model_no"]
+            
+        if machine_data.get("part_no") is not None:
+            update_fields["part_no"] = machine_data["part_no"]
+            
+        if machine_data.get("date_of_manufacturing") is not None:
+            update_fields["date_of_manufacturing"] = machine_data["date_of_manufacturing"]
+            
+        if new_file_key:
+            update_fields["file_key"] = new_file_key
+
+        # Apply machine updates
+        if update_fields:
+            for field, value in update_fields.items():
+                setattr(machine, field, value)
+
+        # Handle customer details updates
+        customer_updates = {}
+        customer_fields = ["customer_name", "customer_contact", "customer_email", "customer_address"]
+        
+        for field in customer_fields:
+            if machine_data.get(field) is not None:
+                customer_updates[field] = machine_data[field]
+
+        if customer_updates:
+            if sold_machine:
+                # Update existing sold machine record
+                for field, value in customer_updates.items():
+                    setattr(sold_machine, field, value)
+            else:
+                # Create new sold machine record if customer details are provided
+                if any(customer_updates.values()):  # Only create if at least one field has a value
+                    sold_machine = models.SoldMachine(
+                        id=uuid.uuid4(),
+                        machine_id=machine.id,
+                        user_id=None,  # Will need to be set based on business logic
+                        **customer_updates
+                    )
+                    db.add(sold_machine)
+
+        # Commit all changes
+        db.commit()
+        db.refresh(machine)
+        if sold_machine:
+            db.refresh(sold_machine)
+
+        # Return updated machine details using the existing function
+        return await get_machine_details(machine_id, db)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update machine: {str(e)}"
+        )
+
 
 
