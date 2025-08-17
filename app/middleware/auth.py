@@ -170,8 +170,8 @@ def require_role(*allowed_roles: str):
 
 # Role-specific dependencies
 require_admin = require_role("admin")
-require_distributer = require_role("distributer")
+require_distributor = require_role("distributor")
 # Allow either role
-require_any_role = require_role("admin", "distributer")
+require_any_role = require_role("admin", "distributor")
 
 

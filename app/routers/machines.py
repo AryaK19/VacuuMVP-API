@@ -118,7 +118,7 @@ async def get_machine_details_endpoint(
 ):
     """
     Get comprehensive machine details including all service reports.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     return await get_machine_details(
         machine_id=id,
@@ -138,7 +138,7 @@ async def get_machine_service_reports_endpoint(
 ):
     """
     Get all service reports for a specific machine with filtering, sorting, and pagination.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     return await get_machine_service_reports(
         machine_id=id,

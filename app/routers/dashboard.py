@@ -5,12 +5,29 @@ from typing import Optional, Any
 from io import BytesIO
 
 from app.db.session import get_db
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse
 from app.middleware.auth import require_any_role
-from app.helper.dashboard import get_recent_activities, get_service_report_detail
+from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics
 from app.external_service.pdf_service import PDFService
 
 router = APIRouter(tags=["Dashboard"])
+
+@router.get("/dashboard/statistics", response_model=DashboardStatsResponse)
+async def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get dashboard statistics including:
+    - Total distributors
+    - Sold vs available machines
+    - Monthly service reports count
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_dashboard_statistics(db=db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/dashboard/recent-activities", response_model=PaginatedRecentActivitiesResponse)
 async def get_recent_service_activities(

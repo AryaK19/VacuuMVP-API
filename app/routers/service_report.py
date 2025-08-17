@@ -26,7 +26,7 @@ async def create_service_report_endpoint(
 ):
     """
     Create a new service report with parts and files.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     try:
         # Parse parts JSON
@@ -73,7 +73,7 @@ async def get_my_service_reports(
 ):
     """
     Get all service reports for the current user with filtering, sorting, and pagination.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     return await get_user_service_reports(
         user_id=str(current_user.id),
@@ -92,7 +92,7 @@ async def get_service_types(
 ):
     """
     Get all available service types.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     try:
         service_types = db.query(models.ServiceType).all()
@@ -124,7 +124,7 @@ async def get_machine_info_by_serial(
 ):
     """
     Get machine information by serial number including customer details and file URL.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     return await get_machine_by_serial_no(
         serial_no=serial_no,
@@ -139,7 +139,7 @@ async def create_customer_record_endpoint(
 ):
     """
     Create a customer record by adding machine to sold_machines table.
-    Accessible by admin and distributer users.
+    Accessible by admin and distributor users.
     """
     return await create_customer_record(
         customer_data=customer_data.dict(),

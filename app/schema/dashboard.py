@@ -30,6 +30,16 @@ class PaginatedRecentActivitiesResponse(BaseModel):
             uuid.UUID: lambda v: str(v)
         }
 
+# New Dashboard Statistics Schema
+class DashboardStatsResponse(BaseModel):
+    total_distributors: int
+    sold_machines: int
+    available_machines: int
+    monthly_service_reports: int
+
+    class Config:
+        orm_mode = True
+
 # File information for service reports
 class ServiceReportFileInfo(BaseModel):
     id: Union[str, uuid.UUID]

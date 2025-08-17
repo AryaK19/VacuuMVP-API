@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.schema.user import PaginatedUserResponse
 from app.middleware.auth import require_admin
 from app.helper.users import get_users_by_role, delete_user
-from app.config.route_config import USERS_ADMINS, USERS_DISTRIBUTERS, USER_DELETE
+from app.config.route_config import USERS_ADMINS, USERS_distributors, USER_DELETE
 
 router = APIRouter(tags=["Users"])
 
@@ -34,8 +34,8 @@ async def get_admins(
         limit=limit
     )
 
-@router.get(USERS_DISTRIBUTERS, response_model=PaginatedUserResponse)
-async def get_distributers(
+@router.get(USERS_distributors, response_model=PaginatedUserResponse)
+async def get_distributors(
     db: Session = Depends(get_db),
     search: Optional[str] = None,
     sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
@@ -45,11 +45,11 @@ async def get_distributers(
     current_user: Any = Depends(require_admin)
 ):
     """
-    Get all users with role 'distributer' with filtering, sorting, and pagination.
+    Get all users with role 'distributor' with filtering, sorting, and pagination.
     Only accessible by admin users.
     """
     return await get_users_by_role(
-        role_name="distributer", 
+        role_name="distributor", 
         db=db, 
         search=search, 
         sort_by=sort_by, 

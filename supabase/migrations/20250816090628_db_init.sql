@@ -104,7 +104,7 @@ CREATE INDEX idx_sold_machines_machine_id ON sold_machines(machine_id);
 
 INSERT INTO role (role_name) VALUES
     ('admin'),
-    ('distributer');
+    ('distributor');
 
 INSERT INTO type (type) VALUES
     ('pump'),

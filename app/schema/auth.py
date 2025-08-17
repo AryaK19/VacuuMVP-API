@@ -10,7 +10,7 @@ class UserCreate(BaseModel):
     name: Optional[str] = None
     email: EmailStr
     phone_number: Optional[str] = None
-    role: Literal["admin", "distributer"] = "distributer"  # Default to distributer
+    role: Literal["admin", "distributor"] = "distributor"  # Default to distributor
     password: str
     confirm_password: str
     

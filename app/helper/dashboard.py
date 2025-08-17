@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, asc, or_, and_
+from sqlalchemy import desc, asc, or_, and_, func, extract
 from typing import Optional
 from math import ceil
+from datetime import datetime, timedelta
 
-from app.db.models import ServiceReport, User, ServiceType, Machine, ServiceReportFiles, ServiceReportPart, Type, SoldMachine
+from app.db.models import ServiceReport, User, ServiceType, Machine, ServiceReportFiles, ServiceReportPart, Type, SoldMachine, Role
 from app.schema.dashboard import (
     PaginatedRecentActivitiesResponse, 
     RecentActivityResponse, 
@@ -11,9 +12,48 @@ from app.schema.dashboard import (
     ServiceReportFileInfo,
     ServiceReportPartInfo,
     ServiceReportMachineInfo,
-    ServiceReportCustomerInfo
+    ServiceReportCustomerInfo,
+    DashboardStatsResponse
 )
 from app.external_service.aws_service import AWSService
+
+async def get_dashboard_statistics(db: Session) -> DashboardStatsResponse:
+    """
+    Get dashboard statistics including distributors, sold/available machines, and monthly service reports.
+    """
+    try:
+        # Get total distributors (users with 'distributor' role)
+        distributor_role = db.query(Role).filter(Role.role_name.ilike('%distributor%')).first()
+        total_distributors = 0
+        
+        if distributor_role:
+            total_distributors = db.query(User).filter(User.role_id == distributor_role.id).count()
+        
+        # Get sold vs available machines
+        total_machines = db.query(Machine).count()
+        sold_machines_count = db.query(SoldMachine.machine_id).distinct().count()
+        available_machines = total_machines - sold_machines_count
+        
+        # Get current month's service reports
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
+        
+        monthly_service_reports = db.query(ServiceReport).filter(
+            extract('month', ServiceReport.created_at) == current_month,
+            extract('year', ServiceReport.created_at) == current_year
+        ).count()
+        
+        return DashboardStatsResponse(
+            total_distributors=total_distributors,
+            sold_machines=sold_machines_count,
+            available_machines=available_machines,
+            monthly_service_reports=monthly_service_reports
+        )
+        
+    except Exception as e:
+        print(f"Dashboard statistics error: {str(e)}")
+        raise Exception(f"Error fetching dashboard statistics: {str(e)}")
 
 async def get_recent_activities(
     db: Session,

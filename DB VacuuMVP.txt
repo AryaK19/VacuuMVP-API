@@ -13,7 +13,7 @@ DB VacuuMVP
 
 2) role
 	id
-	role_name (admin, distributer)
+	role_name (admin, distributor)
 	created_at
 	updated_at
 

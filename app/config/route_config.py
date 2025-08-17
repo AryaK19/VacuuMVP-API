@@ -14,7 +14,7 @@ MACHINE_DELETE = '/machines/{id}/delete'
 
 
 USERS_ADMINS = '/users/admins'
-USERS_DISTRIBUTERS = '/users/distributers'
+USERS_distributors = '/users/distributors'
 USER_DELETE = '/users/{id}/delete'
 
 
