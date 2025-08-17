@@ -12,3 +12,4 @@ alembic
 supabase
 httpx
 boto3
+reportlab
