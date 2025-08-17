@@ -135,10 +135,18 @@ async def get_user_service_reports(
     Helper function to get service reports for a specific user
     """
     # Start building the query
-    query = db.query(models.ServiceReport).filter(
-        models.ServiceReport.user_id == user_id
-    )
-
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    is_admin = False
+    
+    if user and user.role:
+        is_admin = user.role.role_name.lower() == "admin"
+    
+    # Start building the query
+    query = db.query(models.ServiceReport)
+    
+    # Filter by user_id only if not admin
+    if not is_admin:
+        query = query.filter(models.ServiceReport.user_id == user_id)
     # Apply search filter if provided
     if search:
         search_term = f"%{search}%"
@@ -184,6 +192,8 @@ async def get_user_service_reports(
         "has_previous": has_previous,
         "items": result_reports
     }
+
+
 
 def build_service_report_response(service_report: models.ServiceReport, db: Session) -> Dict[str, Any]:
     """
