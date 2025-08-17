@@ -60,17 +60,19 @@ async def get_recent_service_activities(
     """
     Get recent activities from service reports with filtering, sorting, and pagination.
     Shows user name, service type, and creation time for each report.
+    For admin users: shows all reports
+    For distributors: shows only their own reports
     Accessible by any authenticated user.
     """
     return await get_recent_activities(
         db=db,
+        user_id=str(current_user.id),  # Pass the current user ID
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
         limit=limit
     )
-
 @router.get("/dashboard/service-report/{report_id}", response_model=ServiceReportDetailResponse)
 async def get_service_report_details(
     report_id: str = Path(..., description="Service report ID"),

@@ -101,6 +101,7 @@ async def get_service_type_statistics(db: Session) -> ServiceTypeStatsResponse:
 
 async def get_recent_activities(
     db: Session,
+    user_id: str,  # Add user_id parameter
     search: Optional[str] = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
@@ -109,8 +110,17 @@ async def get_recent_activities(
 ) -> PaginatedRecentActivitiesResponse:
     """
     Get recent activities from service reports with pagination, search, and sorting.
+    For admin users: show all activities
+    For distributors: show only their own activities
     """
     try:
+        # Check if user is admin
+        user = db.query(User).filter(User.id == user_id).first()
+        is_admin = False
+        
+        if user and user.role:
+            is_admin = user.role.role_name.lower() == "admin"
+        
         # Base query with joins to get all related data in one query
         query = db.query(
             ServiceReport,
@@ -120,6 +130,10 @@ async def get_recent_activities(
         ).join(User, ServiceReport.user_id == User.id)\
          .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)
         
+        # Filter by user_id only if not admin
+        if not is_admin:
+            query = query.filter(ServiceReport.user_id == user_id)
+            
         # Apply search filter if provided
         if search:
             search_filter = or_(
@@ -180,6 +194,7 @@ async def get_recent_activities(
     except Exception as e:
         print(f"Dashboard error: {str(e)}")  # For debugging
         raise Exception(f"Error fetching recent activities: {str(e)}")
+
 
 async def get_service_report_detail(
     db: Session,
