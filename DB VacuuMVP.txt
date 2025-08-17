@@ -73,6 +73,7 @@ DB VacuuMVP
 	
 	created_at
 	updated_at
+	date_of_manufacturing (year/month) 
 
 	file_key
 
@@ -83,7 +84,7 @@ DB VacuuMVP
 	user_id
 
 	machine_id (machines.id)
-	date_of_manufacturing (year/month) 
+	
 
 
 	customer_name

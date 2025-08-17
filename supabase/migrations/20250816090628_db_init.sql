@@ -27,6 +27,7 @@ CREATE TABLE machines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     serial_no VARCHAR(100) NOT NULL UNIQUE,
     model_no VARCHAR(255) NOT NULL,
+    date_of_manufacturing DATE,
     part_no VARCHAR(100),
     type_id UUID REFERENCES type(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -37,7 +38,6 @@ CREATE TABLE machines (
 CREATE TABLE sold_machines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     machine_id UUID REFERENCES machines(id),
-    date_of_manufacturing DATE,
     customer_name VARCHAR(255),
     customer_contact VARCHAR(50),
     customer_email VARCHAR(255),
@@ -64,7 +64,7 @@ CREATE TABLE users (
 CREATE TABLE service_report (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id),
-    sold_machines_id UUID REFERENCES sold_machines(id),
+    machines_id UUID REFERENCES machines(id),
     problem TEXT,
     solution TEXT,
     service_person_name VARCHAR(255),

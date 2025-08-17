@@ -42,30 +42,19 @@ async def create_service_report(
                     detail="Machine not found"
                 )
 
-        # Validate sold machine exists if sold_machines_id is provided
-        sold_machine = None
-        if service_report_data.get("sold_machines_id"):
-            sold_machine = db.query(models.SoldMachine).filter(
-                models.SoldMachine.id == service_report_data["sold_machines_id"]
-            ).first()
-            
-            if not sold_machine:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Sold machine not found"
-                )
 
         # Create service report
         new_service_report = models.ServiceReport(
             id=uuid.uuid4(),
             user_id=user_id,
             machine_id=service_report_data.get("machine_id"),
-            sold_machines_id=service_report_data.get("sold_machines_id"),
             problem=service_report_data.get("problem"),
             solution=service_report_data.get("solution"),
             service_person_name=service_report_data.get("service_person_name"),
             service_type_id=service_report_data["service_type_id"]
         )
+
+        print("this is done ")
 
         db.add(new_service_report)
         db.flush()  # Flush to get the ID
@@ -91,6 +80,8 @@ async def create_service_report(
             )
             db.add(service_part)
 
+
+
         # Handle file uploads
         if files:
             aws_service = AWSService()
@@ -114,6 +105,8 @@ async def create_service_report(
 
         db.commit()
         db.refresh(new_service_report)
+
+        print("files uploaded")
 
         # Build response with related data
         return {
@@ -200,7 +193,6 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
         "id": str(service_report.id),
         "user_id": str(service_report.user_id),
         "machine_id": str(service_report.machine_id) if service_report.machine_id else None,
-        "sold_machines_id": str(service_report.sold_machines_id) if service_report.sold_machines_id else None,
         "problem": service_report.problem,
         "solution": service_report.solution,
         "service_person_name": service_report.service_person_name,
@@ -217,14 +209,10 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
             "model_no": service_report.machine.model_no,
             "part_no": service_report.machine.part_no
         } if service_report.machine else None,
-        "sold_machine": {
-            "id": str(service_report.sold_machine.id),
-            "customer_name": service_report.sold_machine.customer_name,
-            "customer_contact": service_report.sold_machine.customer_contact
-        } if service_report.sold_machine else None,
         "parts": [
             {
                 "id": str(part.id),
+                "service_report_id": str(part.service_report_id),  # Added missing field
                 "machine_id": str(part.machine_id),
                 "quantity": part.quantity,
                 "created_at": part.created_at,
@@ -235,6 +223,7 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
         "files": [
             {
                 "id": str(file.id),
+                "service_report_id": str(file.service_report_id),  # Added missing field
                 "file_key": file.file_key,
                 "created_at": file.created_at,
                 "updated_at": file.updated_at
@@ -278,14 +267,17 @@ async def get_machine_by_serial_no(
         return {
             "success": True,
             "machine": {
+                "machine_id": str(machine.id),
                 "serial_no": machine.serial_no,
                 "model_no": machine.model_no,
                 "part_no": machine.part_no,
+                "sold_machine_id": str(sold_machine.id) if sold_machine else None,
+                "date_of_manufacturing": machine.date_of_manufacturing,
                 "customer_name": sold_machine.customer_name if sold_machine else None,
                 "customer_contact": sold_machine.customer_contact if sold_machine else None,
                 "customer_email": sold_machine.customer_email if sold_machine else None,
                 "customer_address": sold_machine.customer_address if sold_machine else None,
-                "date_of_manufacturing": sold_machine.date_of_manufacturing if sold_machine else None,
+                
                 "file_url": file_url,
                 "is_sold": bool(sold_machine)
             }
@@ -335,7 +327,6 @@ async def create_customer_record(
             id=uuid.uuid4(),
             user_id=user_id,
             machine_id=customer_data["machine_id"],
-            date_of_manufacturing=customer_data.get("date_of_manufacturing"),
             customer_name=customer_data["customer_name"],
             customer_contact=customer_data.get("customer_contact"),
             customer_email=customer_data.get("customer_email"),
@@ -353,7 +344,6 @@ async def create_customer_record(
                 "id": str(new_sold_machine.id),
                 "user_id": str(new_sold_machine.user_id),
                 "machine_id": str(new_sold_machine.machine_id),
-                "date_of_manufacturing": new_sold_machine.date_of_manufacturing,
                 "customer_name": new_sold_machine.customer_name,
                 "customer_contact": new_sold_machine.customer_contact,
                 "customer_email": new_sold_machine.customer_email,

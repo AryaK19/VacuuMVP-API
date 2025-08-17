@@ -4,7 +4,7 @@ from typing import Optional, Any
 
 from app.db.session import get_db
 from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse
-from app.middleware.auth import require_admin
+from app.middleware.auth import require_admin, require_any_role
 from app.helper.machines import get_machines_by_type, create_machine_by_type
 
 from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART
@@ -43,7 +43,7 @@ async def get_parts(
     sort_order: Optional[str] = Query("desc", description="Sort order (asc or desc)"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
-    current_user : Any = Depends(require_admin)
+    current_user : Any = Depends(require_any_role)
 ):
     """
     Get all machines with type 'part' with filtering, sorting, and pagination.

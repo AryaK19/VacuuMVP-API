@@ -7,9 +7,9 @@ class MachineBase(BaseModel):
     serial_no: str
     model_no: str
     part_no: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
 
 class SoldMachineBase(BaseModel):
-    date_of_manufacturing: Optional[date] = None
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None
@@ -41,9 +41,9 @@ class MachineUpdate(BaseModel):
     model_no: Optional[str] = None
     part_no: Optional[str] = None
     type_id: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
 
 class SoldMachineUpdate(BaseModel):
-    date_of_manufacturing: Optional[date] = None
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None

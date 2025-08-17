@@ -78,7 +78,6 @@ class PaginatedServiceReportResponse(BaseModel):
 
 class SoldMachineCreateRequest(BaseModel):
     machine_id: str
-    date_of_manufacturing: Optional[date] = None
     customer_name: str
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None

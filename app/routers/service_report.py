@@ -16,7 +16,6 @@ router = APIRouter(tags=["Service Reports"])
 async def create_service_report_endpoint(
     service_type_id: str = Form(...),
     machine_id: Optional[str] = Form(None),
-    sold_machines_id: Optional[str] = Form(None),
     problem: Optional[str] = Form(None),
     solution: Optional[str] = Form(None),
     service_person_name: Optional[str] = Form(None),
@@ -32,18 +31,17 @@ async def create_service_report_endpoint(
     try:
         # Parse parts JSON
         parts_data = json.loads(parts) if parts else []
-        
-        # Validate that at least one of machine_id or sold_machines_id is provided
-        if not machine_id and not sold_machines_id:
+
+        # Validate that at least one of machine_id or sold_machine_id is provided
+        if not machine_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Either machine_id or sold_machines_id must be provided"
+                detail="machine_id must be provided"
             )
 
         service_report_data = {
             "service_type_id": service_type_id,
             "machine_id": machine_id,
-            "sold_machines_id": sold_machines_id,
             "problem": problem,
             "solution": solution,
             "service_person_name": service_person_name

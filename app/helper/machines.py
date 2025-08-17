@@ -80,6 +80,7 @@ async def get_machines_by_type(
             "type_id": str(machine.type_id),
             "created_at": machine.created_at,
             "updated_at": machine.updated_at,
+            "date_of_manufacturing": machine.date_of_manufacturing,
             "machine_type": {
                 "id": str(machine.machine_type.id),
                 "type": machine.machine_type.type
@@ -92,7 +93,7 @@ async def get_machines_by_type(
             sold_info = {
                 "id": str(machine.sold_info.id),
                 "machine_id": str(machine.sold_info.machine_id),
-                "date_of_manufacturing": machine.sold_info.date_of_manufacturing,
+                
                 "customer_name": machine.sold_info.customer_name,
                 "customer_contact": machine.sold_info.customer_contact,
                 "customer_email": machine.sold_info.customer_email,
