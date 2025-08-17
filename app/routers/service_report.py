@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status, Path
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, Any, List
 import json
+from app.external_service.pdf_service import PDFService
 from app.db import models
 from app.db.session import get_db
 from app.schema.service_report import ServiceReportCreateResponse, PaginatedServiceReportResponse, SoldMachineCreateRequest, SoldMachineCreateResponse
 from app.middleware.auth import require_any_role, get_current_user
-from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no, create_customer_record
+from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no, create_customer_record, get_service_report_detail_pdf
 from app.db.models import User
-from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE, SERVICE_REPORT_CUSTOMER
-
+from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE, SERVICE_REPORT_CUSTOMER, SERVICE_REPORT_PDF
+from io import BytesIO
 router = APIRouter(tags=["Service Reports"])
 
 @router.post(SERVICE_REPORTS, response_model=ServiceReportCreateResponse)
@@ -148,3 +150,23 @@ async def create_customer_record_endpoint(
     )
 
 
+@router.get(SERVICE_REPORT_PDF)
+async def download_service_report_pdf(
+    report_id: str = Path(..., description="Service report ID"),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Download service report as PDF.
+    """
+    try:
+        pdf_buffer = await get_service_report_detail_pdf(db=db, report_id=report_id)
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=service_report_{report_id[:8]}.pdf"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    

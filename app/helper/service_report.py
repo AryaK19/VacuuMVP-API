@@ -1,11 +1,36 @@
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc
+
 from typing import Optional, Dict, Any, List
 import uuid
 
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from io import BytesIO
+import os
+
 from app.db import models
 from app.external_service.aws_service import AWSService
+
+from sqlalchemy import desc, asc,  and_
+
+
+
+from app.db.models import ServiceReport, User, ServiceType, Machine, ServiceReportFiles, ServiceReportPart, Type, SoldMachine, Role
+from app.schema.dashboard import (
+ 
+    ServiceReportDetailResponse, 
+    ServiceReportFileInfo,
+    ServiceReportPartInfo,
+    ServiceReportMachineInfo,
+    ServiceReportCustomerInfo,
+
+)
+
 
 async def create_service_report(
     service_report_data: Dict[str, Any],
@@ -379,3 +404,378 @@ async def create_customer_record(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create customer record: {str(e)}"
         )
+
+
+async def get_service_report_detail_pdf(
+    db: Session,
+    report_id: str
+) -> BytesIO:
+    """
+    Generate a PDF service report with professional formatting matching the company template.
+    """
+    try:
+        # Get service report data (reuse existing function logic)
+        result = db.query(
+            ServiceReport,
+            User.name.label('user_name'),
+            User.email.label('user_email'),
+            ServiceType.service_type.label('service_type_name'),
+            Machine.serial_no.label('machine_serial_no'),
+            Machine.model_no.label('machine_model_no'),
+            Machine.part_no.label('machine_part_no'),
+            Machine.date_of_manufacturing.label('machine_manufacturing_date'),
+            Type.type.label('machine_type_name'),
+            SoldMachine.customer_name.label('customer_name'),
+            SoldMachine.customer_email.label('customer_email'),
+            SoldMachine.customer_contact.label('customer_contact'),
+            SoldMachine.customer_address.label('customer_address'),
+            SoldMachine.created_at.label('sold_date')
+        ).join(User, ServiceReport.user_id == User.id)\
+         .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)\
+         .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
+         .outerjoin(Type, Machine.type_id == Type.id)\
+         .outerjoin(SoldMachine, SoldMachine.machine_id == ServiceReport.machine_id)\
+         .filter(ServiceReport.id == report_id)\
+         .first()
+        
+        if not result:
+            raise Exception("Service report not found")
+        
+        (report, user_name, user_email, service_type_name, 
+         machine_serial_no, machine_model_no, machine_part_no, 
+         machine_manufacturing_date, machine_type_name,
+         customer_name, customer_email, customer_contact, 
+         customer_address, sold_date) = result
+
+        # Create PDF buffer
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72,
+                              topMargin=72, bottomMargin=18)
+
+        # Define styles
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            textColor=colors.black
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=12,
+            spaceAfter=12,
+            textColor=colors.black
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=6
+        )
+
+        # Build PDF content
+        story = []
+
+        # Header with company info
+        header_data = [
+            ['BRAND Scientific Equipment Pvt. Ltd.', '', 'BRAND'],
+            ['304, 3rd Floor - G - Wing', '', ''],
+            ['Dolphin, Himmatinagar Business Park', '', ''],
+            ['Powai, Mumbai - 400076 (INDIA)', '', ''],
+            ['', '', ''],
+            ['Tel: +91 22 42957730', '', '']
+        ]
+        
+        header_table = Table(header_data, colWidths=[4*inch, 1*inch, 1.5*inch])
+        header_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(header_table)
+        story.append(Spacer(1, 20))
+
+        # Service Report Title
+        story.append(Paragraph("SERVICE REPORT", title_style))
+        story.append(Spacer(1, 10))
+
+        # Report details table
+        report_details = [
+            [f"Ref No: {report_id[:8].upper()}", f"Date: {report.created_at.strftime('%d/%m/%Y')}"]
+        ]
+        
+        details_table = Table(report_details, colWidths=[3*inch, 3*inch])
+        details_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        story.append(details_table)
+        story.append(Spacer(1, 20))
+
+        # Customer Information
+        story.append(Paragraph("Customer Name:", heading_style))
+        story.append(Paragraph(customer_name or "N/A", normal_style))
+        story.append(Spacer(1, 10))
+
+        story.append(Paragraph("Address:", heading_style))
+        story.append(Paragraph(customer_address or "N/A", normal_style))
+        story.append(Spacer(1, 15))
+
+        # Contact Information Table
+        contact_data = [
+            ['Contact Person:', '', 'Designation:', ''],
+            ['Contact No.:', customer_contact or 'N/A', 'Email:', customer_email or 'N/A']
+        ]
+        
+        contact_table = Table(contact_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+        contact_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(contact_table)
+        story.append(Spacer(1, 20))
+
+        # Nature of Service checkboxes
+        service_data = [
+            ['Nature of Service:', 'Paid ☐', 'Health Check ☐', 'Warranty ☐', 'AMC ☐']
+        ]
+        
+        # Mark the appropriate service type
+        if service_type_name:
+            service_lower = service_type_name.lower()
+            for i, item in enumerate(service_data[0][1:], 1):
+                service_name = item.split(' ')[0].lower()
+                if service_name in service_lower:
+                    service_data[0][i] = item.replace('☐', '☑')
+        
+        service_table = Table(service_data, colWidths=[1.8*inch, 1*inch, 1.2*inch, 1*inch, 1*inch])
+        service_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(service_table)
+        story.append(Spacer(1, 20))
+
+        # Contamination Free Declaration
+        contamination_data = [
+            ['Contamination Free Declaration Submitted', 'YES', 'NO', 'NA']
+        ]
+        
+        contamination_table = Table(contamination_data, colWidths=[3*inch, 0.8*inch, 0.8*inch, 0.8*inch])
+        contamination_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ]))
+        story.append(contamination_table)
+        story.append(Spacer(1, 30))
+
+        # Product Details
+        story.append(Paragraph("Product Details", heading_style))
+        story.append(Spacer(1, 10))
+
+        product_data = [
+            ['Model No:', machine_model_no or 'N/A', 'Sr. No. / Mfg:', machine_serial_no or 'N/A']
+        ]
+        
+        product_table = Table(product_data, colWidths=[1.5*inch, 2*inch, 1.5*inch, 1.5*inch])
+        product_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(product_table)
+        story.append(Spacer(1, 20))
+
+        # Complaint section
+        story.append(Paragraph("Complaint:", heading_style))
+        story.append(Paragraph(report.problem or "No complaint specified", normal_style))
+        story.append(Spacer(1, 100))  # Space for writing
+
+        # Observation/Action section
+        story.append(Paragraph("Observation / Action:", heading_style))
+        story.append(Paragraph(report.solution or "No action specified", normal_style))
+        story.append(Spacer(1, 100))  # Space for writing
+
+        # Service person name
+        if report.service_person_name:
+            story.append(Spacer(1, 50))
+            story.append(Paragraph(f"Service Engineer: {report.service_person_name}", normal_style))
+
+        # Build PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        return buffer
+        
+    except Exception as e:
+        print(f"PDF generation error: {str(e)}")
+        raise Exception(f"Error generating PDF: {str(e)}")
+
+async def get_service_report_detail(
+    db: Session,
+    report_id: str
+) -> ServiceReportDetailResponse:
+    """
+    Get detailed information about a specific service report including files, machine details, customer info, and parts.
+    """
+    try:
+        # Query with all joins to get complete information including customer data
+        result = db.query(
+            ServiceReport,
+            User.name.label('user_name'),
+            User.email.label('user_email'),
+            ServiceType.service_type.label('service_type_name'),
+            Machine.serial_no.label('machine_serial_no'),
+            Machine.model_no.label('machine_model_no'),
+            Machine.part_no.label('machine_part_no'),
+            Machine.date_of_manufacturing.label('machine_manufacturing_date'),
+            Type.type.label('machine_type_name'),
+            SoldMachine.customer_name.label('customer_name'),
+            SoldMachine.customer_email.label('customer_email'),
+            SoldMachine.customer_contact.label('customer_contact'),
+            SoldMachine.customer_address.label('customer_address'),
+            SoldMachine.created_at.label('sold_date')
+        ).join(User, ServiceReport.user_id == User.id)\
+         .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)\
+         .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
+         .outerjoin(Type, Machine.type_id == Type.id)\
+         .outerjoin(SoldMachine, and_(
+             SoldMachine.machine_id == ServiceReport.machine_id,
+             SoldMachine.user_id == ServiceReport.user_id
+         ))\
+         .filter(ServiceReport.id == report_id)\
+         .first()
+        
+        if not result:
+            raise Exception("Service report not found")
+        
+        (report, user_name, user_email, service_type_name, 
+         machine_serial_no, machine_model_no, machine_part_no, 
+         machine_manufacturing_date, machine_type_name,
+         customer_name, customer_email, customer_contact, 
+         customer_address, sold_date) = result
+        
+        # Use name as display name, fallback to email
+        display_name = user_name or user_email or "Unknown User"
+        
+        # Create machine info object
+        machine_info = None
+        if machine_serial_no or machine_model_no or machine_part_no:
+            machine_info = ServiceReportMachineInfo(
+                serial_no=machine_serial_no,
+                model_no=machine_model_no,
+                part_no=machine_part_no,
+                type_name=machine_type_name,
+                date_of_manufacturing=machine_manufacturing_date
+            )
+        
+        # Create customer info object
+        customer_info = None
+        if customer_name or customer_email or customer_contact or customer_address:
+            customer_info = ServiceReportCustomerInfo(
+                customer_name=customer_name,
+                customer_email=customer_email,
+                customer_contact=customer_contact,
+                customer_address=customer_address,
+                sold_date=sold_date
+            )
+        
+        # Get service report files
+        report_files = db.query(ServiceReportFiles).filter(
+            ServiceReportFiles.service_report_id == report_id
+        ).all()
+        
+        # Get service report parts with machine details
+        report_parts = db.query(
+            ServiceReportPart,
+            Machine.serial_no.label('part_machine_serial_no'),
+            Machine.model_no.label('part_machine_model_no'),
+            Machine.part_no.label('part_machine_part_no')
+        ).join(Machine, ServiceReportPart.machine_id == Machine.id)\
+         .filter(ServiceReportPart.service_report_id == report_id)\
+         .all()
+        
+        # Initialize AWS service for generating file URLs
+        aws_service = AWSService()
+        
+        # Process files and generate URLs
+        files_info = []
+        for file_record in report_files:
+            try:
+                # Try to generate presigned URL for secure access
+                url_result = aws_service.get_presigned_url(file_record.file_key, expires_in=3600)
+                
+                if url_result["success"]:
+                    file_url = url_result["url"]
+                else:
+                    # Fallback to direct URL if presigned URL fails
+                    bucket_name = aws_service.bucket_name
+                    region = aws_service.region
+                    file_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{file_record.file_key}"
+                
+                file_info = ServiceReportFileInfo(
+                    id=str(file_record.id),
+                    file_key=file_record.file_key,
+                    file_url=file_url,
+                    created_at=file_record.created_at
+                )
+                files_info.append(file_info)
+                
+            except Exception as file_error:
+                print(f"Error processing file {file_record.file_key}: {str(file_error)}")
+                # Continue with other files even if one fails
+                continue
+        
+        # Process parts information
+        parts_info = []
+        for part_result in report_parts:
+            part_record, part_serial_no, part_model_no, part_part_no = part_result
+            
+            part_info = ServiceReportPartInfo(
+                id=str(part_record.id),
+                machine_serial_no=part_serial_no,
+                machine_model_no=part_model_no,
+                machine_part_no=part_part_no,
+                quantity=part_record.quantity,
+                created_at=part_record.created_at
+            )
+            parts_info.append(part_info)
+        
+        return ServiceReportDetailResponse(
+            id=str(report.id),
+            user_name=display_name,
+            user_email=user_email,
+            service_type_name=service_type_name,
+            machine_info=machine_info,
+            customer_info=customer_info,
+            problem=report.problem,
+            solution=report.solution,
+            service_person_name=report.service_person_name,
+            files=files_info,
+            parts=parts_info,
+            created_at=report.created_at,
+            updated_at=report.updated_at
+        )
+        
+    except Exception as e:
+        print(f"Service report detail error: {str(e)}")
+        raise Exception(f"Error fetching service report details: {str(e)}")

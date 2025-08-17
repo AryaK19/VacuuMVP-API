@@ -24,6 +24,8 @@ SERVICE_REPORTS_TYPES = '/service-reports/types'
 SERVICE_REPORTS_MACHINE = '/service-reports/machine/{serial_no}'
 SERVICE_REPORT_CUSTOMER = '/service-reports/customer'
 
+SERVICE_REPORT_PDF = '/service-reports/{report_id}/pdf'
+
 
 DASHBOARD_STATS = '/dashboard/stats'
 DASHBOARD_RECENT_ACTIVITIES = '/dashboard/recent-activities'
