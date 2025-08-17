@@ -251,8 +251,11 @@ async def get_machine_by_serial_no(
     """
     try:
         # Find machine by serial number
-        machine = db.query(models.Machine).filter(
-            models.Machine.serial_no == serial_no
+        machine = db.query(models.Machine).join(
+            models.Type, models.Machine.type_id == models.Type.id
+        ).filter(
+            models.Machine.serial_no == serial_no,
+            models.Type.type.ilike('%pump%')
         ).first()
         
         if not machine:

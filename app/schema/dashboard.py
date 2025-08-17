@@ -125,3 +125,17 @@ class ServiceReportDetailResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda v: str(v)
         }
+
+class PumpNumberStatsItem(BaseModel):
+    part_no: Optional[str] = None
+    model_no: Optional[str] = None
+    service_count: int
+
+    class Config:
+        orm_mode = True
+
+class PumpNumberStatsResponse(BaseModel):
+    part_statistics: List[PumpNumberStatsItem]
+
+    class Config:
+        orm_mode = True

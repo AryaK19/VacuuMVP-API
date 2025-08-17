@@ -5,10 +5,13 @@ from typing import Optional, Any
 from io import BytesIO
 
 from app.db.session import get_db
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse
+
 from app.middleware.auth import require_any_role
-from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics, get_service_type_statistics
+
 from app.external_service.pdf_service import PDFService
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse, PumpNumberStatsResponse
+from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics, get_service_type_statistics, get_part_number_statistics
+
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -84,6 +87,24 @@ async def get_service_report_details(
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@router.get("/dashboard/part-number-statistics", response_model=PumpNumberStatsResponse)
+async def get_part_number_stats(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get part number statistics for dashboard.
+    Returns count of service reports for each part number along with model number.
+    Results are ordered by service count (highest first).
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_part_number_statistics(db=db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @router.get("/dashboard/service-report/{report_id}/download-pdf")
 async def download_service_report_pdf(
     report_id: str = Path(..., description="Service report ID"),
@@ -132,3 +153,6 @@ async def download_service_report_pdf(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+    
+
+

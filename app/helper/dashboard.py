@@ -15,7 +15,9 @@ from app.schema.dashboard import (
     ServiceReportCustomerInfo,
     DashboardStatsResponse,
     ServiceTypeStatsResponse,
-    ServiceTypeStatsItem
+    ServiceTypeStatsItem,
+    PumpNumberStatsResponse,
+    PumpNumberStatsItem
 )
 from app.external_service.aws_service import AWSService
 
@@ -328,3 +330,41 @@ async def get_service_report_detail(
     except Exception as e:
         print(f"Service report detail error: {str(e)}")
         raise Exception(f"Error fetching service report details: {str(e)}")
+
+async def get_part_number_statistics(db: Session) -> PumpNumberStatsResponse:
+    """
+    Get service statistics grouped by part number.
+    Returns count of service reports for each part number along with model number.
+    """
+    try:
+        # Query to get part_no, model_no and count of service reports
+        pump_stats_query = db.query(
+            Machine.part_no,
+            Machine.model_no,
+            func.count(ServiceReport.id).label('service_count')
+        ).outerjoin(ServiceReport, ServiceReport.machine_id == Machine.id)\
+         .filter(Machine.part_no.isnot(None))\
+         .group_by(Machine.part_no, Machine.model_no)\
+         .order_by(desc(func.count(ServiceReport.id)))
+        
+        results = pump_stats_query.all()
+        
+        # Transform results to response format
+        pump_statistics = []
+        for result in results:
+            part_no, model_no, service_count = result
+            
+            stat_item = PumpNumberStatsItem(
+                part_no=part_no,
+                model_no=model_no,
+                service_count=service_count
+            )
+            pump_statistics.append(stat_item)
+
+        return PumpNumberStatsResponse(part_statistics=pump_statistics)
+
+    except Exception as e:
+        print(f"Pump number statistics error: {str(e)}")
+        raise Exception(f"Error fetching pump number statistics: {str(e)}")
+
+
