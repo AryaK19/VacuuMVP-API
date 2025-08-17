@@ -390,5 +390,78 @@ async def get_machine_service_reports(
             detail=f"Failed to retrieve machine service reports: {str(e)}"
         )
 
+async def delete_machine(
+    machine_id: str,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Helper function to delete a machine with cascade deletion
+    """
+    try:
+        # Get machine by ID
+        machine = db.query(models.Machine).filter(
+            models.Machine.id == machine_id
+        ).first()
+        
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Machine with ID '{machine_id}' not found"
+            )
+
+        # Store machine info for response
+        machine_info = {
+            "id": str(machine.id),
+            "serial_no": machine.serial_no,
+            "model_no": machine.model_no,
+            "type": machine.machine_type.type
+        }
+
+        # Delete related files from S3 if machine has a file
+        if machine.file_key:
+            try:
+                aws_service = AWSService()
+                aws_service.delete_file(machine.file_key)
+            except Exception as e:
+                print(f"Warning: Failed to delete machine file from S3: {str(e)}")
+
+        # Delete service report files from S3 for related service reports
+        service_reports = db.query(models.ServiceReport).filter(
+            models.ServiceReport.machine_id == machine_id
+        ).all()
+        
+        for report in service_reports:
+            for file_record in report.service_report_files:
+                try:
+                    aws_service = AWSService()
+                    aws_service.delete_file(file_record.file_key)
+                except Exception as e:
+                    print(f"Warning: Failed to delete service report file from S3: {str(e)}")
+
+        # Database will handle cascade deletion due to foreign key constraints
+        # The following will be automatically deleted:
+        # - SoldMachine records (via foreign key)
+        # - ServiceReport records (via foreign key)
+        # - ServiceReportPart records (via foreign key to service reports)
+        # - ServiceReportFiles records (via foreign key to service reports)
+        
+        db.delete(machine)
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Machine {machine_info['serial_no']} and all related data deleted successfully",
+            "deleted_machine": machine_info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete machine: {str(e)}"
+        )
+
 
 

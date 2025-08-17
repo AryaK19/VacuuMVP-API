@@ -5,8 +5,8 @@ from typing import Optional, Any
 from app.db.session import get_db
 from app.schema.user import PaginatedUserResponse
 from app.middleware.auth import require_admin
-from app.helper.users import get_users_by_role
-from app.config.route_config import USERS_ADMINS, USERS_DISTRIBUTERS
+from app.helper.users import get_users_by_role, delete_user
+from app.config.route_config import USERS_ADMINS, USERS_DISTRIBUTERS, USER_DELETE
 
 router = APIRouter(tags=["Users"])
 
@@ -56,4 +56,19 @@ async def get_distributers(
         sort_order=sort_order, 
         page=page, 
         limit=limit
+    )
+
+@router.delete(USER_DELETE)
+async def delete_user_endpoint(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Delete a user and all related data from both database and Supabase Auth.
+    Only accessible by admin users.
+    """
+    return await delete_user(
+        user_id=id,
+        db=db
     )

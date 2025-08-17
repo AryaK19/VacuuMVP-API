@@ -4,6 +4,7 @@ from sqlalchemy import desc, asc
 from typing import Optional, Dict, Any
 
 from app.db import models
+from app.config.client import get_supabase_client
 
 async def get_users_by_role(
     role_name: str,
@@ -92,3 +93,77 @@ async def get_users_by_role(
         "has_previous": has_previous,
         "items": result_users
     }
+
+async def delete_user(
+    user_id: str,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Helper function to delete a user with cascade deletion from both database and Supabase Auth
+    """
+    try:
+        # Get user by ID
+        user = db.query(models.User).filter(
+            models.User.id == user_id
+        ).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID '{user_id}' not found"
+            )
+
+        # Store user info for response
+        user_info = {
+            "id": str(user.id),
+            "email": user.email,
+            "name": user.name,
+            "supabase_user_id": str(user.user_id)
+        }
+
+        # Delete related files from S3 for user's service reports
+        service_reports = db.query(models.ServiceReport).filter(
+            models.ServiceReport.user_id == user_id
+        ).all()
+        
+        for report in service_reports:
+            for file_record in report.service_report_files:
+                try:
+                    aws_service = AWSService()
+                    aws_service.delete_file(file_record.file_key)
+                except Exception as e:
+                    print(f"Warning: Failed to delete service report file from S3: {str(e)}")
+
+        # Delete user from Supabase Auth first
+        try:
+            supabase = get_supabase_client()
+            auth_result = supabase.auth.admin.delete_user(str(user.user_id))
+            print(f"Deleted user from Supabase Auth: {user.email}")
+        except Exception as e:
+            print(f"Warning: Failed to delete user from Supabase Auth: {str(e)}")
+            # Continue with database deletion even if Supabase deletion fails
+
+        # Database will handle cascade deletion due to foreign key constraints
+        # The following will be automatically deleted:
+        # - SoldMachine records (via foreign key)
+        # - ServiceReport records (via foreign key)
+        # - ServiceReportPart records (via foreign key to service reports)
+        # - ServiceReportFiles records (via foreign key to service reports)
+        
+        db.delete(user)
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"User {user_info['email']} and all related data deleted successfully from both database and Supabase Auth",
+            "deleted_user": user_info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
