@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from app.db.session import get_db, engine, SessionLocal
 from app.db import models
-from app.routers import auth, machines, users
+from app.routers import auth, machines, users, service_report
 from app.middleware.auth import auth_middleware
 
 # Load environment variables
@@ -41,17 +41,11 @@ def init_db():
 # Call init_db function
 init_db()
 
-# Configure CORS
-origins = [
-    "http://localhost",
-    "http://localhost:5173",  # React default port
-    "http://localhost:8000",  # FastAPI default port
-    # Add more origins as needed for production
-]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(machines.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(service_report.router, prefix="/api")
 
 # Root endpoint
 @app.get("/")

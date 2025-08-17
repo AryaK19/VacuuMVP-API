@@ -12,3 +12,8 @@ MACHINES_CREATE_PART = '/machines/parts/create'
 
 USERS_ADMINS = '/users/admins'
 USERS_DISTRIBUTERS = '/users/distributers'
+
+SERVICE_REPORTS = '/service-reports'
+SERVICE_REPORTS_TYPES = '/service-reports/types'
+SERVICE_REPORTS_MACHINE = '/service-reports/machine/{serial_no}'
+SERVICE_REPORT_CUSTOMER = '/service-reports/customer'

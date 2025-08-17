@@ -50,7 +50,7 @@ DB VacuuMVP
 	service_report_id
 	machine_id (here type= part)
 
-	quantity ** 
+	quantity
 	
 
 7) files
@@ -74,13 +74,13 @@ DB VacuuMVP
 	created_at
 	updated_at
 
-	file_key ** 
+	file_key
 
 
 
 9) sold_machines
 	id
-	user_id **
+	user_id
 
 	machine_id (machines.id)
 	date_of_manufacturing (year/month) 
@@ -90,7 +90,8 @@ DB VacuuMVP
 	customer_contact
 	customer_email
 	customer_address
-	
+
+
 
 
 

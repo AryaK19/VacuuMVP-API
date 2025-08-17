@@ -143,7 +143,9 @@ async def login(request: Request, db: Session = Depends(get_db)):
         user = db.query(models.User).filter(
             (models.User.user_id == auth_response.user.id) | (models.User.email == email)
         ).first()
-        
+
+        user_role = db.query(models.Role).filter(models.Role.id == user.role_id).first() if user else None
+
         if not user:
             # If user doesn't exist in our DB but exists in Supabase, create them
             hashed_password = pwd_context.hash(password)
@@ -166,7 +168,8 @@ async def login(request: Request, db: Session = Depends(get_db)):
             "user": {
                 "id": str(auth_response.user.id),
                 "email": auth_response.user.email,
-                "name": user.name
+                "name": user.name,
+                "role": user_role.role_name if user_role else None
             },
             "session": {
                 "access_token": auth_response.session.access_token,
