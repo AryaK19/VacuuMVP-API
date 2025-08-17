@@ -585,8 +585,11 @@ async def update_machine_details(
         if sold_machine:
             db.refresh(sold_machine)
 
-        # Return updated machine details using the existing function
-        return await get_machine_details(machine_id, db)
+        # Get updated machine details and add the required message field
+        machine_details = await get_machine_details(machine_id, db)
+        machine_details["message"] = "Machine updated successfully"
+        
+        return machine_details
         
     except HTTPException:
         raise
