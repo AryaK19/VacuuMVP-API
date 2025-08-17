@@ -99,7 +99,7 @@ class AWSService:
         Upload a file to S3 bucket
         
         Args:
-            file: File-like object or path to a file
+            file: ServiceReportFiles-like object or path to a file
             folder: Folder path in S3 where the file will be uploaded
             content_type: Optional MIME type of the file
             file_name: Optional custom name for the file
@@ -165,7 +165,7 @@ class AWSService:
         except Exception as e:
             return {
                 "success": False,
-                "error": "File upload failed",
+                "error": "ServiceReportFiles upload failed",
                 "message": str(e)
             }
             
@@ -237,7 +237,7 @@ class AWSService:
             
             return {
                 "success": True,
-                "message": f"File {file_key} deleted successfully"
+                "message": f"ServiceReportFiles {file_key} deleted successfully"
             }
             
         except ClientError as e:

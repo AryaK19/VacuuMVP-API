@@ -83,7 +83,7 @@ CREATE TABLE service_report_parts (
 );
 
 -- Create files table
-CREATE TABLE files (
+CREATE TABLE service_report_files (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     service_report_id UUID REFERENCES service_report(id),
     file_key VARCHAR(255) NOT NULL,
@@ -98,7 +98,7 @@ CREATE INDEX idx_service_report_sold_machines_id ON service_report(sold_machines
 CREATE INDEX idx_service_report_service_type_id ON service_report(service_type_id);
 CREATE INDEX idx_machines_type_id ON machines(type_id);
 CREATE INDEX idx_service_report_parts_machine_id ON service_report_parts(machine_id);
-CREATE INDEX idx_files_service_report_id ON files(service_report_id);
+CREATE INDEX idx_service_report_files_service_report_id ON service_report_files(service_report_id);
 CREATE INDEX idx_sold_machines_machine_id ON sold_machines(machine_id);
 
 

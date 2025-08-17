@@ -161,7 +161,7 @@ async def create_machine_by_type(
             if not upload_result["success"]:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"File upload failed: {upload_result.get('message', 'Unknown error')}"
+                    detail=f"ServiceReportFiles upload failed: {upload_result.get('message', 'Unknown error')}"
                 )
             
             file_key = upload_result["file_key"]
@@ -169,7 +169,7 @@ async def create_machine_by_type(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"File upload failed: {str(e)}"
+                detail=f"ServiceReportFiles upload failed: {str(e)}"
             )
 
     # Create new machine

@@ -137,7 +137,7 @@ class ServiceReport(Base):
   
     service_type = relationship("ServiceType", back_populates="service_reports")
     parts = relationship("ServiceReportPart", back_populates="service_report")
-    files = relationship("File", back_populates="service_report")
+    service_report_files = relationship("ServiceReportFiles", back_populates="service_report")
     
     def __repr__(self):
         return f"<ServiceReport {self.id}>"
@@ -160,8 +160,8 @@ class ServiceReportPart(Base):
     def __repr__(self):
         return f"<ServiceReportPart {self.id}>"
 
-class File(Base):
-    __tablename__ = "files"
+class ServiceReportFiles(Base):
+    __tablename__ = "service_report_files"
     
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     service_report_id = Column(UUID(as_uuid=True), ForeignKey("service_report.id"))
@@ -170,8 +170,8 @@ class File(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    service_report = relationship("ServiceReport", back_populates="files")
+    service_report = relationship("ServiceReport", back_populates="service_report_files")
     
     def __repr__(self):
-        return f"<File {self.file_key}>"
+        return f"<ServiceReportFiles {self.file_key}>"
     # Additional methods and properties can be defined here

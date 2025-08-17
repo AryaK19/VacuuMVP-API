@@ -96,7 +96,7 @@ async def create_service_report(
                     )
                     
                     if upload_result["success"]:
-                        file_record = models.File(
+                        file_record = models.ServiceReportFiles(
                             id=uuid.uuid4(),
                             service_report_id=new_service_report.id,
                             file_key=upload_result["file_key"]
@@ -212,7 +212,7 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
         "parts": [
             {
                 "id": str(part.id),
-                "service_report_id": str(part.service_report_id),  # Added missing field
+                "service_report_id": str(part.service_report_id),
                 "machine_id": str(part.machine_id),
                 "quantity": part.quantity,
                 "created_at": part.created_at,
@@ -223,12 +223,12 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
         "files": [
             {
                 "id": str(file.id),
-                "service_report_id": str(file.service_report_id),  # Added missing field
+                "service_report_id": str(file.service_report_id),
                 "file_key": file.file_key,
                 "created_at": file.created_at,
                 "updated_at": file.updated_at
             }
-            for file in service_report.files
+            for file in service_report.service_report_files  # Changed from .files to .service_report_files
         ]
     }
 

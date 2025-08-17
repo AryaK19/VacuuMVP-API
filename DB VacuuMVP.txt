@@ -53,7 +53,7 @@ DB VacuuMVP
 	quantity
 	
 
-7) files
+7) service_report_files
 	id 
 	service_report_id
 	file_key
