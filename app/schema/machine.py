@@ -84,3 +84,27 @@ class PaginatedMachineResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda v: str(v)
         }
+
+class ServiceReportSummary(BaseModel):
+    id: Union[str, uuid.UUID]
+    user_id: Union[str, uuid.UUID]
+    problem: Optional[str] = None
+    solution: Optional[str] = None
+    service_person_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    service_type: Optional[Dict[str, Any]] = None
+    user: Optional[Dict[str, Any]] = None
+
+    class Config:
+        orm_mode = True
+
+class MachineDetailsResponse(BaseModel):
+    success: bool
+    machine: Dict[str, Any]
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }

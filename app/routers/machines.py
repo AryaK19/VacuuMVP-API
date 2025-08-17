@@ -3,11 +3,11 @@ from sqlalchemy.orm import Session
 from typing import Optional, Any
 
 from app.db.session import get_db
-from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse
+from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_machines_by_type, create_machine_by_type
+from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details
 
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS
 
 router = APIRouter(tags=["Machines"])
 
@@ -109,5 +109,20 @@ async def create_part(
         machine_data=machine_data,
         db=db,
         file=file
+    )
+
+@router.get(MACHINE_DETAILS, response_model=MachineDetailsResponse)
+async def get_machine_details_endpoint(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get comprehensive machine details including all service reports.
+    Accessible by admin and distributer users.
+    """
+    return await get_machine_details(
+        machine_id=id,
+        db=db
     )
 

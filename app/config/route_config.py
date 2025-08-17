@@ -8,6 +8,7 @@ MACHINES_PUMPS = '/machines/pumps'
 MACHINES_PARTS = '/machines/parts'
 MACHINES_CREATE_PUMP = '/machines/pumps/create'
 MACHINES_CREATE_PART = '/machines/parts/create'
+MACHINE_DETAILS = '/machines/details/{id}'
 
 
 USERS_ADMINS = '/users/admins'

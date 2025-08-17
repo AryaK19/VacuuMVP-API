@@ -209,3 +209,107 @@ async def create_machine_by_type(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create {type_name}: {str(e)}"
         )
+
+
+async def get_machine_details(
+    machine_id: str,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Helper function to get comprehensive machine details including service reports
+    """
+    try:
+        # Get machine by ID
+        machine = db.query(models.Machine).filter(
+            models.Machine.id == machine_id
+        ).first()
+        
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Machine with ID '{machine_id}' not found"
+            )
+        
+        # Get sold machine info if available
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.machine_id == machine.id
+        ).first()
+        
+        # Get all service reports for this machine (sorted by created_at desc)
+        service_reports = db.query(models.ServiceReport).filter(
+            models.ServiceReport.machine_id == machine.id
+        ).order_by(models.ServiceReport.created_at.desc()).all()
+        
+        # Generate presigned URL for machine file if exists
+        file_url = None
+        if machine.file_key:
+            aws_service = AWSService()
+            url_result = aws_service.get_presigned_url(machine.file_key)
+            if url_result["success"]:
+                file_url = url_result["url"]
+        
+        # Build service reports response
+        service_reports_data = []
+        for report in service_reports:
+            report_data = {
+                "id": str(report.id),
+                "user_id": str(report.user_id),
+                "problem": report.problem,
+                "solution": report.solution,
+                "service_person_name": report.service_person_name,
+                "created_at": report.created_at,
+                "updated_at": report.updated_at,
+                "service_type": {
+                    "id": str(report.service_type.id),
+                    "service_type": report.service_type.service_type
+                } if report.service_type else None,
+                "user": {
+                    "id": str(report.user.id),
+                    "name": report.user.name,
+                    "email": report.user.email
+                } if report.user else None
+            }
+            service_reports_data.append(report_data)
+        
+        return {
+            "success": True,
+            "machine": {
+                "id": str(machine.id),
+                "serial_no": machine.serial_no,
+                "model_no": machine.model_no,
+                "part_no": machine.part_no,
+                "date_of_manufacturing": machine.date_of_manufacturing,
+                "file_url": file_url,
+                "created_at": machine.created_at,
+                "updated_at": machine.updated_at,
+                "machine_type": {
+                    "id": str(machine.machine_type.id),
+                    "type": machine.machine_type.type
+                },
+                "sold_info": {
+                    "id": str(sold_machine.id),
+                    "customer_name": sold_machine.customer_name,
+                    "customer_contact": sold_machine.customer_contact,
+                    "customer_email": sold_machine.customer_email,
+                    "customer_address": sold_machine.customer_address,
+                    "created_at": sold_machine.created_at,
+                    "updated_at": sold_machine.updated_at,
+                    "user": {
+                        "id": str(sold_machine.user.id),
+                        "name": sold_machine.user.name,
+                        "email": sold_machine.user.email
+                    } if sold_machine.user else None
+                } if sold_machine else None,
+                "is_sold": bool(sold_machine),
+                "service_reports": service_reports_data,
+                "total_service_reports": len(service_reports_data)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve machine details: {str(e)}"
+        )
