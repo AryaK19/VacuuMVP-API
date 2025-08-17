@@ -108,3 +108,22 @@ class MachineDetailsResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda v: str(v)
         }
+
+class MachineUpdateRequest(BaseModel):
+    serial_no: Optional[str] = None
+    model_no: Optional[str] = None
+    part_no: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
+    # Customer details
+    customer_name: Optional[str] = None
+    customer_contact: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_address: Optional[str] = None
+
+class MachineUpdateResponse(BaseModel):
+    success: bool
+    message: str
+    machine: Dict[str, Any]
+
+    class Config:
+        orm_mode = True

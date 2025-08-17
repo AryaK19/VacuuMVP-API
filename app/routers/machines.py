@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from typing import Optional, Any, Dict
 
 from app.db.session import get_db
-from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse
+from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse, MachineUpdateResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE
+from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine, update_machine_details
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE
 
 router = APIRouter(tags=["Machines"])
 
@@ -164,4 +164,65 @@ async def delete_machine_endpoint(
         machine_id=id,
         db=db
     )
+
+@router.put(MACHINE_UPDATE, response_model=MachineUpdateResponse)
+async def update_machine_endpoint(
+    id: str,
+    serial_no: Optional[str] = Form(None),
+    model_no: Optional[str] = Form(None),
+    part_no: Optional[str] = Form(None),
+    date_of_manufacturing: Optional[str] = Form(None),  # Will be parsed to date
+    customer_name: Optional[str] = Form(None),
+    customer_contact: Optional[str] = Form(None),
+    customer_email: Optional[str] = Form(None),
+    customer_address: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Update machine details including customer information and optional file replacement.
+    Only accessible by admin users.
+    """
+    try:
+        # Parse date if provided
+        parsed_date = None
+        if date_of_manufacturing:
+            from datetime import datetime
+            try:
+                parsed_date = datetime.strptime(date_of_manufacturing, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Use YYYY-MM-DD"
+                )
+
+        machine_data = {
+            "serial_no": serial_no,
+            "model_no": model_no,
+            "part_no": part_no,
+            "date_of_manufacturing": parsed_date,
+            "customer_name": customer_name,
+            "customer_contact": customer_contact,
+            "customer_email": customer_email,
+            "customer_address": customer_address
+        }
+        
+        # Remove None values to avoid updating fields that weren't provided
+        machine_data = {k: v for k, v in machine_data.items() if v is not None}
+        
+        return await update_machine_details(
+            machine_id=id,
+            machine_data=machine_data,
+            db=db,
+            file=file
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update machine: {str(e)}"
+        )
 
