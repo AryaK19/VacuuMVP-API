@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 from app.db.session import get_db
 from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details
-
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS
+from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS
 
 router = APIRouter(tags=["Machines"])
 
@@ -124,5 +123,30 @@ async def get_machine_details_endpoint(
     return await get_machine_details(
         machine_id=id,
         db=db
+    )
+
+@router.get(MACHINE_SERVICE_REPORTS, response_model=Dict[str, Any])
+async def get_machine_service_reports_endpoint(
+    id: str,
+    db: Session = Depends(get_db),
+    search: Optional[str] = None,
+    sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
+    sort_order: Optional[str] = Query("desc", description="Sort order (asc or desc)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get all service reports for a specific machine with filtering, sorting, and pagination.
+    Accessible by admin and distributer users.
+    """
+    return await get_machine_service_reports(
+        machine_id=id,
+        db=db,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit
     )
 

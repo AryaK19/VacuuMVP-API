@@ -7,9 +7,11 @@ from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceRepor
 from app.middleware.auth import require_any_role
 from app.helper.dashboard import get_recent_activities, get_service_report_detail
 
+from app.config.route_config import DASHBOARD_RECENT_ACTIVITIES, DASHBOARD_SERVICE_REPORT
+
 router = APIRouter(tags=["Dashboard"])
 
-@router.get("/dashboard/recent-activities", response_model=PaginatedRecentActivitiesResponse)
+@router.get(DASHBOARD_RECENT_ACTIVITIES, response_model=PaginatedRecentActivitiesResponse)
 async def get_recent_service_activities(
     db: Session = Depends(get_db),
     search: Optional[str] = Query(None, description="Search by user name or service type"),
@@ -33,7 +35,7 @@ async def get_recent_service_activities(
         limit=limit
     )
 
-@router.get("/dashboard/service-report/{report_id}", response_model=ServiceReportDetailResponse)
+@router.get(DASHBOARD_SERVICE_REPORT, response_model=ServiceReportDetailResponse)
 async def get_service_report_details(
     report_id: str = Path(..., description="Service report ID"),
     db: Session = Depends(get_db),

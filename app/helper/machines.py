@@ -216,7 +216,7 @@ async def get_machine_details(
     db: Session
 ) -> Dict[str, Any]:
     """
-    Helper function to get comprehensive machine details including service reports
+    Helper function to get comprehensive machine details without service reports
     """
     try:
         # Get machine by ID
@@ -235,11 +235,6 @@ async def get_machine_details(
             models.SoldMachine.machine_id == machine.id
         ).first()
         
-        # Get all service reports for this machine (sorted by created_at desc)
-        service_reports = db.query(models.ServiceReport).filter(
-            models.ServiceReport.machine_id == machine.id
-        ).order_by(models.ServiceReport.created_at.desc()).all()
-        
         # Generate presigned URL for machine file if exists
         file_url = None
         if machine.file_key:
@@ -247,29 +242,6 @@ async def get_machine_details(
             url_result = aws_service.get_presigned_url(machine.file_key)
             if url_result["success"]:
                 file_url = url_result["url"]
-        
-        # Build service reports response
-        service_reports_data = []
-        for report in service_reports:
-            report_data = {
-                "id": str(report.id),
-                "user_id": str(report.user_id),
-                "problem": report.problem,
-                "solution": report.solution,
-                "service_person_name": report.service_person_name,
-                "created_at": report.created_at,
-                "updated_at": report.updated_at,
-                "service_type": {
-                    "id": str(report.service_type.id),
-                    "service_type": report.service_type.service_type
-                } if report.service_type else None,
-                "user": {
-                    "id": str(report.user.id),
-                    "name": report.user.name,
-                    "email": report.user.email
-                } if report.user else None
-            }
-            service_reports_data.append(report_data)
         
         return {
             "success": True,
@@ -300,9 +272,7 @@ async def get_machine_details(
                         "email": sold_machine.user.email
                     } if sold_machine.user else None
                 } if sold_machine else None,
-                "is_sold": bool(sold_machine),
-                "service_reports": service_reports_data,
-                "total_service_reports": len(service_reports_data)
+                "is_sold": bool(sold_machine)
             }
         }
         
@@ -313,3 +283,112 @@ async def get_machine_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve machine details: {str(e)}"
         )
+
+async def get_machine_service_reports(
+    machine_id: str,
+    db: Session,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
+    page: int = 1,
+    limit: int = 10
+) -> Dict[str, Any]:
+    """
+    Helper function to get service reports for a specific machine with pagination
+    """
+    try:
+        # Verify machine exists
+        machine = db.query(models.Machine).filter(
+            models.Machine.id == machine_id
+        ).first()
+        
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Machine with ID '{machine_id}' not found"
+            )
+
+        # Start building the query
+        query = db.query(models.ServiceReport).filter(
+            models.ServiceReport.machine_id == machine_id
+        )
+
+        # Apply search filter if provided
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                (models.ServiceReport.problem.ilike(search_term)) |
+                (models.ServiceReport.solution.ilike(search_term)) |
+                (models.ServiceReport.service_person_name.ilike(search_term))
+            )
+
+        # Count total items for pagination
+        total_items = query.count()
+
+        # Apply sorting
+        if hasattr(models.ServiceReport, sort_by):
+            sort_column = getattr(models.ServiceReport, sort_by)
+            if sort_order.lower() == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(asc(sort_column))
+        else:
+            query = query.order_by(desc(models.ServiceReport.created_at))
+
+        # Apply pagination
+        query = query.offset((page - 1) * limit).limit(limit)
+
+        # Execute query
+        service_reports = query.all()
+
+        # Calculate pagination metadata
+        has_next = (page * limit) < total_items
+        has_previous = page > 1
+
+        # Build service reports response
+        service_reports_data = []
+        for report in service_reports:
+            report_data = {
+                "id": str(report.id),
+                "user_id": str(report.user_id),
+                "problem": report.problem,
+                "solution": report.solution,
+                "service_person_name": report.service_person_name,
+                "created_at": report.created_at,
+                "updated_at": report.updated_at,
+                "service_type": {
+                    "id": str(report.service_type.id),
+                    "service_type": report.service_type.service_type
+                } if report.service_type else None,
+                "user": {
+                    "id": str(report.user.id),
+                    "name": report.user.name,
+                    "email": report.user.email
+                } if report.user else None
+            }
+            service_reports_data.append(report_data)
+
+        return {
+            "total": total_items,
+            "page": page,
+            "limit": limit,
+            "has_next": has_next,
+            "has_previous": has_previous,
+            "items": service_reports_data,
+            "machine": {
+                "id": str(machine.id),
+                "serial_no": machine.serial_no,
+                "model_no": machine.model_no
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve machine service reports: {str(e)}"
+        )
+
+
+
