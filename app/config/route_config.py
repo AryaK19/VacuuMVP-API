@@ -10,10 +10,13 @@ MACHINES_CREATE_PUMP = '/machines/pumps/create'
 MACHINES_CREATE_PART = '/machines/parts/create'
 MACHINE_DETAILS = '/machines/details/{id}'
 MACHINE_SERVICE_REPORTS = '/machines/{id}/service-reports'
+MACHINE_DELETE = '/machines/{id}/delete'
 
 
 USERS_ADMINS = '/users/admins'
 USERS_DISTRIBUTERS = '/users/distributers'
+USER_DELETE = '/users/{id}/delete'
+
 
 SERVICE_REPORTS = '/service-reports'
 SERVICE_REPORTS_TYPES = '/service-reports/types'

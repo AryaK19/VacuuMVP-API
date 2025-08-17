@@ -5,8 +5,8 @@ from typing import Optional, Any, Dict
 from app.db.session import get_db
 from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS
+from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE
 
 router = APIRouter(tags=["Machines"])
 
@@ -148,5 +148,20 @@ async def get_machine_service_reports_endpoint(
         sort_order=sort_order,
         page=page,
         limit=limit
+    )
+
+@router.delete(MACHINE_DELETE)
+async def delete_machine_endpoint(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Delete a machine and all related data (service reports, sold machine info, files).
+    Only accessible by admin users.
+    """
+    return await delete_machine(
+        machine_id=id,
+        db=db
     )
 
