@@ -125,3 +125,14 @@ class ServiceReportDetailResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda v: str(v)
         }
+
+class DistributorStatsResponse(BaseModel):
+    machines_sold: int
+    active_amc_contracts: int
+    service_reports: int
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }

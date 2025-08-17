@@ -5,9 +5,9 @@ from typing import Optional, Any
 from io import BytesIO
 
 from app.db.session import get_db
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse,DistributorStatsResponse
 from app.middleware.auth import require_any_role
-from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics, get_service_type_statistics
+from app.helper.dashboard import get_recent_activities, get_service_report_detail, get_dashboard_statistics, get_service_type_statistics,get_distributor_statistics
 from app.external_service.pdf_service import PDFService
 
 router = APIRouter(tags=["Dashboard"])
@@ -134,3 +134,20 @@ async def download_service_report_pdf(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+@router.get("/dashboard/distributor-statistics", response_model=DistributorStatsResponse)
+async def get_distributor_stats(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get distributor-specific dashboard statistics including:
+    - Machines sold by this distributor
+    - Active AMC contracts
+    - Service reports submitted by this distributor
+    Only shows data for the current user's ID.
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_distributor_statistics(db=db, user_id=str(current_user.id))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

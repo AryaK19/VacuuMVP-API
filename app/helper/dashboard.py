@@ -15,7 +15,8 @@ from app.schema.dashboard import (
     ServiceReportCustomerInfo,
     DashboardStatsResponse,
     ServiceTypeStatsResponse,
-    ServiceTypeStatsItem
+    ServiceTypeStatsItem,
+    DistributorStatsResponse
 )
 from app.external_service.aws_service import AWSService
 
@@ -343,3 +344,37 @@ async def get_service_report_detail(
     except Exception as e:
         print(f"Service report detail error: {str(e)}")
         raise Exception(f"Error fetching service report details: {str(e)}")
+
+
+async def get_distributor_statistics(db: Session, user_id: str) -> DistributorStatsResponse:
+    """
+    Get statistics for a specific distributor by user_id.
+    Shows machines sold, active AMC contracts, and service reports count.
+    """
+    try:
+        # Get machines sold count - count of sold machines for this distributor
+        machines_sold = db.query(SoldMachine).filter(SoldMachine.user_id == user_id).count()
+        
+        # Get active AMC contracts count
+        # Find the AMC service type ID
+        amc_service_type = db.query(ServiceType).filter(ServiceType.service_type.ilike('%amc%')).first()
+        
+        active_amc_contracts = 0
+        if amc_service_type:
+            active_amc_contracts = db.query(ServiceReport).filter(
+                ServiceReport.service_type_id == amc_service_type.id,
+                ServiceReport.user_id == user_id
+            ).count()
+        
+        # Get total service reports count submitted by this distributor
+        service_reports = db.query(ServiceReport).filter(ServiceReport.user_id == user_id).count()
+        
+        return DistributorStatsResponse(
+            machines_sold=machines_sold,
+            active_amc_contracts=active_amc_contracts,
+            service_reports=service_reports
+        )
+        
+    except Exception as e:
+        print(f"Distributor statistics error: {str(e)}")
+        raise Exception(f"Error fetching distributor statistics: {str(e)}")
