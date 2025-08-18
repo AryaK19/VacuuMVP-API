@@ -28,15 +28,16 @@ async def get_machines_by_type(
             detail=f"Type '{type_name}' not found"
         )
 
-    # Start building the query
-    query = db.query(models.Machine).outerjoin(models.SoldMachine).join(models.Type).filter(
-        models.Machine.type_id == type_obj.id
-    )
+    # Build base query with joins for search
+    base_query = db.query(models.Machine) \
+        .outerjoin(models.SoldMachine) \
+        .join(models.Type) \
+        .filter(models.Machine.type_id == type_obj.id)
 
     # Apply search filter if provided
     if search:
         search_term = f"%{search}%"
-        query = query.filter(
+        base_query = base_query.filter(
             (models.Machine.serial_no.ilike(search_term)) |
             (models.Machine.model_no.ilike(search_term)) |
             (models.Machine.part_no.ilike(search_term)) |
@@ -44,34 +45,40 @@ async def get_machines_by_type(
             (models.SoldMachine.customer_email.ilike(search_term))
         )
 
-    # Count total items for pagination
-    total_items = query.count()
+    # Get all matching machine IDs (distinct)
+    machine_ids_query = base_query.with_entities(models.Machine.id)
+    machine_ids = [str(row.id) for row in machine_ids_query.distinct().all()]
+    total_items = len(machine_ids)
 
-    # Apply sorting
+    # Sorting in Python since we can't sort by other columns in DISTINCT subquery
     if hasattr(models.Machine, sort_by):
-        sort_column = getattr(models.Machine, sort_by)
-        if sort_order.lower() == "desc":
-            query = query.order_by(desc(sort_column))
-        else:
-            query = query.order_by(asc(sort_column))
+        sort_attr = sort_by
     else:
-        # Default sort by created_at desc if sort field is invalid
-        query = query.order_by(desc(models.Machine.created_at))
+        sort_attr = "created_at"
 
-    # Apply pagination
-    query = query.offset((page - 1) * limit).limit(limit)
+    reverse = sort_order.lower() == "desc"
 
-    # Execute query and fetch results
-    machines = query.all()
+    # Fetch all machines for these IDs
+    if not machine_ids:
+        machines = []
+    else:
+        machines = db.query(models.Machine).filter(models.Machine.id.in_(machine_ids)).all()
+        # Sort machines in Python
+        machines = sorted(
+            machines,
+            key=lambda m: getattr(m, sort_attr) or "",
+            reverse=reverse
+        )
+        # Paginate in Python
+        machines = machines[(page - 1) * limit : page * limit]
 
-    # Calculate pagination metadata
+    # Pagination metadata
     has_next = (page * limit) < total_items
     has_previous = page > 1
 
     # Prepare response with machine type info and sold info
     result_machines = []
     for machine in machines:
-        # Convert UUID objects to strings to avoid validation errors
         machine_dict = {
             "id": str(machine.id),
             "serial_no": machine.serial_no,
@@ -87,13 +94,11 @@ async def get_machines_by_type(
             },
             "sold_info": None
         }
-
         # Add sold machine info if available
-        if machine.sold_info:
+        if hasattr(machine, "sold_info") and machine.sold_info:
             sold_info = {
                 "id": str(machine.sold_info.id),
                 "machine_id": str(machine.sold_info.machine_id),
-                
                 "customer_name": machine.sold_info.customer_name,
                 "customer_contact": machine.sold_info.customer_contact,
                 "customer_email": machine.sold_info.customer_email,
@@ -113,6 +118,7 @@ async def get_machines_by_type(
         "has_previous": has_previous,
         "items": result_machines
     }
+
 
 
 async def create_machine_by_type(
@@ -599,6 +605,16 @@ async def update_machine_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update machine: {str(e)}"
         )
+
+async def get_model_no_by_part_no(part_no: str, db):
+    """
+    Given a part_no, return the corresponding model_no.
+    """
+     # Adjust import if needed
+    machine = db.query(models.Machine).filter(models.Machine.part_no == part_no).first()
+    if machine:
+        return machine.model_no
+    return None
 
 
 

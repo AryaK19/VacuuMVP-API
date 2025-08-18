@@ -8,11 +8,7 @@ from app.db.models import ServiceReport, User, ServiceType, Machine, ServiceRepo
 from app.schema.dashboard import (
     PaginatedRecentActivitiesResponse, 
     RecentActivityResponse, 
-    ServiceReportDetailResponse, 
-    ServiceReportFileInfo,
-    ServiceReportPartInfo,
-    ServiceReportMachineInfo,
-    ServiceReportCustomerInfo,
+
     DashboardStatsResponse,
     ServiceTypeStatsResponse,
     ServiceTypeStatsItem,

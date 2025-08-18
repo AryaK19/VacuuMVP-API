@@ -9,10 +9,11 @@ from app.db.session import get_db
 from app.middleware.auth import require_any_role
 
 from app.external_service.pdf_service import PDFService
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, ServiceReportDetailResponse, DashboardStatsResponse, ServiceTypeStatsResponse, PumpNumberStatsResponse
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, DashboardStatsResponse, ServiceTypeStatsResponse, PumpNumberStatsResponse
 
-from app.helper.service_report import get_service_report_detail
+
 from app.helper.dashboard import get_recent_activities, get_dashboard_statistics, get_service_type_statistics, get_part_number_statistics
+
 
 
 router = APIRouter(tags=["Dashboard"])
@@ -75,21 +76,9 @@ async def get_recent_service_activities(
         page=page,
         limit=limit
     )
-@router.get("/dashboard/service-report/{report_id}", response_model=ServiceReportDetailResponse)
-async def get_service_report_details(
-    report_id: str = Path(..., description="Service report ID"),
-    db: Session = Depends(get_db),
-    current_user: Any = Depends(require_any_role)
-):
-    """
-    Get detailed information about a specific service report.
-    Shows complete service report details including user, machine, and service information.
-    Accessible by any authenticated user.
-    """
-    try:
-        return await get_service_report_detail(db=db, report_id=report_id)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+
+
+
 
 @router.get("/dashboard/part-number-statistics", response_model=PumpNumberStatsResponse)
 async def get_part_number_stats(

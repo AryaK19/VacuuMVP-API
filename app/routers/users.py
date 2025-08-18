@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.schema.user import PaginatedUserResponse
 from app.middleware.auth import require_admin
 from app.helper.users import get_users_by_role, delete_user
-from app.config.route_config import USERS_ADMINS, USERS_distributors, USER_DELETE
+from app.config.route_config import USERS_ADMINS, USERS_DISTRIBUTORS, USER_DELETE
 
 router = APIRouter(tags=["Users"])
 
@@ -34,7 +34,7 @@ async def get_admins(
         limit=limit
     )
 
-@router.get(USERS_distributors, response_model=PaginatedUserResponse)
+@router.get(USERS_DISTRIBUTORS, response_model=PaginatedUserResponse)
 async def get_distributors(
     db: Session = Depends(get_db),
     search: Optional[str] = None,

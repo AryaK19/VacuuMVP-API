@@ -90,3 +90,78 @@ class SoldMachineCreateResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class ServiceReportPartInfo(BaseModel):
+    id: Union[str, uuid.UUID]
+    machine_serial_no: Optional[str] = None
+    machine_model_no: Optional[str] = None
+    machine_part_no: Optional[str] = None
+    quantity: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }
+
+# Machine information for service reports
+class ServiceReportMachineInfo(BaseModel):
+    serial_no: Optional[str] = None
+    model_no: Optional[str] = None
+    part_no: Optional[str] = None
+    type_name: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
+
+    class Config:
+        orm_mode = True
+
+
+class ServiceReportFileInfo(BaseModel):
+    id: Union[str, uuid.UUID]
+    file_key: str
+    file_url: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }
+
+
+
+
+# Customer information from sold machines
+class ServiceReportCustomerInfo(BaseModel):
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_contact: Optional[str] = None
+    customer_address: Optional[str] = None
+    sold_date: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+
+
+class ServiceReportDetailResponse(BaseModel):
+    id: Union[str, uuid.UUID]
+    user_name: str
+    user_email: str
+    service_type_name: str
+    machine_info: Optional[ServiceReportMachineInfo] = None
+    customer_info: Optional[ServiceReportCustomerInfo] = None
+    problem: Optional[str] = None
+    solution: Optional[str] = None
+    service_person_name: Optional[str] = None
+    files: List[ServiceReportFileInfo] = []
+    parts: List[ServiceReportPartInfo] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }

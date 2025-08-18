@@ -21,7 +21,7 @@ from sqlalchemy import desc, asc,  and_
 
 
 from app.db.models import ServiceReport, User, ServiceType, Machine, ServiceReportFiles, ServiceReportPart, Type, SoldMachine, Role
-from app.schema.dashboard import (
+from app.schema.service_report import (
  
     ServiceReportDetailResponse, 
     ServiceReportFileInfo,
@@ -157,32 +157,39 @@ async def get_user_service_reports(
     limit: int = 10
 ) -> Dict[str, Any]:
     """
-    Helper function to get service reports for a specific user
+    Helper function to get service reports for a specific user.
+    Search works across service_person_name, machine serial/model/part no, and service type.
     """
-    # Start building the query
+    # Get user and check admin
     user = db.query(models.User).filter(models.User.id == user_id).first()
     is_admin = False
-    
     if user and user.role:
         is_admin = user.role.role_name.lower() == "admin"
-    
-    # Start building the query
-    query = db.query(models.ServiceReport)
-    
+
+    # Start query with necessary joins for search
+    query = db.query(models.ServiceReport) \
+        .outerjoin(models.Machine, models.ServiceReport.machine_id == models.Machine.id) \
+        .outerjoin(models.ServiceType, models.ServiceReport.service_type_id == models.ServiceType.id)
+
     # Filter by user_id only if not admin
     if not is_admin:
         query = query.filter(models.ServiceReport.user_id == user_id)
+
     # Apply search filter if provided
     if search:
         search_term = f"%{search}%"
         query = query.filter(
+            (models.ServiceReport.service_person_name.ilike(search_term)) |
             (models.ServiceReport.problem.ilike(search_term)) |
             (models.ServiceReport.solution.ilike(search_term)) |
-            (models.ServiceReport.service_person_name.ilike(search_term))
+            (models.Machine.serial_no.ilike(search_term)) |
+            (models.Machine.model_no.ilike(search_term)) |
+            (models.Machine.part_no.ilike(search_term)) |
+            (models.ServiceType.service_type.ilike(search_term))
         )
 
     # Count total items for pagination
-    total_items = query.count()
+    total_items = query.distinct().count()
 
     # Apply sorting
     if hasattr(models.ServiceReport, sort_by):
@@ -363,7 +370,6 @@ async def create_customer_record(
         # Create sold machine record
         new_sold_machine = models.SoldMachine(
             id=uuid.uuid4(),
-            user_id=user_id,
             machine_id=customer_data["machine_id"],
             customer_name=customer_data["customer_name"],
             customer_contact=customer_data.get("customer_contact"),
@@ -380,7 +386,6 @@ async def create_customer_record(
             "message": "Customer record created successfully",
             "sold_machine": {
                 "id": str(new_sold_machine.id),
-                "user_id": str(new_sold_machine.user_id),
                 "machine_id": str(new_sold_machine.machine_id),
                 "customer_name": new_sold_machine.customer_name,
                 "customer_contact": new_sold_machine.customer_contact,
@@ -411,10 +416,10 @@ async def get_service_report_detail_pdf(
     report_id: str
 ) -> BytesIO:
     """
-    Generate a PDF service report with professional formatting matching the company template.
+    Generate a PDF service report matching the web layout, with logo at top right.
     """
+    print("this is being created")
     try:
-        # Get service report data (reuse existing function logic)
         result = db.query(
             ServiceReport,
             User.name.label('user_name'),
@@ -447,188 +452,146 @@ async def get_service_report_detail_pdf(
          customer_name, customer_email, customer_contact, 
          customer_address, sold_date) = result
 
-        # Create PDF buffer
+        # Fetch service parts for this report
+        parts = db.query(
+            ServiceReportPart,
+            Machine.serial_no.label('part_serial_no'),
+            Machine.model_no.label('part_model_no'),
+            Machine.part_no.label('part_part_no')
+        ).join(Machine, ServiceReportPart.machine_id == Machine.id)\
+         .filter(ServiceReportPart.service_report_id == report_id)\
+         .all()
+
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72,
-                              topMargin=72, bottomMargin=18)
-
-        # Define styles
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
         styles = getSampleStyleSheet()
-        
-        # Custom styles
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=30,
-            alignment=TA_CENTER,
-            textColor=colors.black
-        )
-        
-        heading_style = ParagraphStyle(
-            'CustomHeading',
-            parent=styles['Heading2'],
-            fontSize=12,
-            spaceAfter=12,
-            textColor=colors.black
-        )
-        
-        normal_style = ParagraphStyle(
-            'CustomNormal',
-            parent=styles['Normal'],
-            fontSize=10,
-            spaceAfter=6
-        )
+        normal = styles['Normal']
+        bold = styles['Heading4']
 
-        # Build PDF content
         story = []
 
-        # Header with company info
-        header_data = [
-            ['BRAND Scientific Equipment Pvt. Ltd.', '', 'BRAND'],
-            ['304, 3rd Floor - G - Wing', '', ''],
-            ['Dolphin, Himmatinagar Business Park', '', ''],
-            ['Powai, Mumbai - 400076 (INDIA)', '', ''],
-            ['', '', ''],
-            ['Tel: +91 22 42957730', '', '']
-        ]
-        
-        header_table = Table(header_data, colWidths=[4*inch, 1*inch, 1.5*inch])
-        header_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ]))
-        story.append(header_table)
-        story.append(Spacer(1, 20))
+        # Add logo and title in a table for alignment
+        from reportlab.platypus import Image as RLImage
+        import os
 
-        # Service Report Title
-        story.append(Paragraph("SERVICE REPORT", title_style))
-        story.append(Spacer(1, 10))
+        logo_path = os.path.join(os.path.dirname(__file__), '..', 'public', 'vacuubrand-logo-removebg.png')
+        # Make sure the path is absolute and normalized
+        logo_path = os.path.abspath(logo_path)
+        try:
+            logo = RLImage(logo_path, width=80, height=15)
+        except Exception:
+            logo = None
 
-        # Report details table
-        report_details = [
-            [f"Ref No: {report_id[:8].upper()}", f"Date: {report.created_at.strftime('%d/%m/%Y')}"]
+        title_para = Paragraph("Service Report Details", styles['Title'])
+        if logo:
+            header_table = Table(
+                [[title_para, logo]],
+                colWidths=[370, 110]
+            )
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ]))
+            story.append(header_table)
+        else:
+            story.append(title_para)
+        story.append(Spacer(1, 12))
+
+        # Service Report Details Table
+        details_data = [
+            ["Service Type", Paragraph(f"<b>{service_type_name or 'N/A'}</b>", normal), "Service Person", user_name or "N/A"],
+            ["Problem", report.problem or "N/A", "Solution", report.solution or "N/A"]
         ]
-        
-        details_table = Table(report_details, colWidths=[3*inch, 3*inch])
+        details_table = Table(details_data, colWidths=[80, 150, 80, 150])
         details_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ]))
         story.append(details_table)
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 16))
 
-        # Customer Information
-        story.append(Paragraph("Customer Name:", heading_style))
-        story.append(Paragraph(customer_name or "N/A", normal_style))
-        story.append(Spacer(1, 10))
+        # Customer Information Header
+        story.append(Paragraph("Customer Information", bold))
+        story.append(Spacer(1, 6))
 
-        story.append(Paragraph("Address:", heading_style))
-        story.append(Paragraph(customer_address or "N/A", normal_style))
-        story.append(Spacer(1, 15))
-
-        # Contact Information Table
-        contact_data = [
-            ['Contact Person:', '', 'Designation:', ''],
-            ['Contact No.:', customer_contact or 'N/A', 'Email:', customer_email or 'N/A']
+        # Customer Info Table
+        customer_data = [
+            ["Customer Name", customer_name or "N/A", "Contact", customer_contact or "N/A"],
+            ["Email", customer_email or "N/A", "Purchase Date", sold_date.strftime('%m/%d/%Y, %I:%M:%S %p') if sold_date else "N/A"],
+            ["Address", customer_address or "N/A", "", ""]
         ]
-        
-        contact_table = Table(contact_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
-        contact_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        customer_table = Table(customer_data, colWidths=[80, 150, 80, 150])
+        customer_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ]))
-        story.append(contact_table)
-        story.append(Spacer(1, 20))
+        story.append(customer_table)
+        story.append(Spacer(1, 16))
 
-        # Nature of Service checkboxes
-        service_data = [
-            ['Nature of Service:', 'Paid ☐', 'Health Check ☐', 'Warranty ☐', 'AMC ☐']
+        # Machine Information Header
+        story.append(Paragraph("Machine Information", bold))
+        story.append(Spacer(1, 6))
+
+        # Machine Info Table
+        machine_data = [
+            ["Serial No", machine_serial_no or "N/A", "Model No", machine_model_no or "N/A"],
+            ["Part No", machine_part_no or "N/A", "Type", machine_type_name or "N/A"],
+            ["Manufacturing Date", str(machine_manufacturing_date) if machine_manufacturing_date else "Not specified", "", ""]
         ]
-        
-        # Mark the appropriate service type
-        if service_type_name:
-            service_lower = service_type_name.lower()
-            for i, item in enumerate(service_data[0][1:], 1):
-                service_name = item.split(' ')[0].lower()
-                if service_name in service_lower:
-                    service_data[0][i] = item.replace('☐', '☑')
-        
-        service_table = Table(service_data, colWidths=[1.8*inch, 1*inch, 1.2*inch, 1*inch, 1*inch])
-        service_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        machine_table = Table(machine_data, colWidths=[80, 150, 80, 150])
+        machine_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ]))
-        story.append(service_table)
-        story.append(Spacer(1, 20))
+        story.append(machine_table)
+        story.append(Spacer(1, 16))
 
-        # Contamination Free Declaration
-        contamination_data = [
-            ['Contamination Free Declaration Submitted', 'YES', 'NO', 'NA']
-        ]
-        
-        contamination_table = Table(contamination_data, colWidths=[3*inch, 0.8*inch, 0.8*inch, 0.8*inch])
-        contamination_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        # Service Parts Header
+        story.append(Paragraph("Service Parts", bold))
+        story.append(Spacer(1, 6))
+
+        # Service Parts Table
+        parts_data = [["Serial No", "Model No", "Part No", "Quantity", "Added At"]]
+        for part, part_serial_no, part_model_no, part_part_no in parts:
+            parts_data.append([
+                part_serial_no or "N/A",
+                part_model_no or "N/A",
+                part_part_no or "N/A",
+                str(part.quantity),
+                part.created_at.strftime('%m/%d/%Y, %I:%M:%S %p') if part.created_at else "N/A"
+            ])
+        parts_table = Table(parts_data, colWidths=[70, 120, 80, 50, 110])
+        parts_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.grey),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ]))
-        story.append(contamination_table)
-        story.append(Spacer(1, 30))
+        story.append(parts_table)
+        story.append(Spacer(1, 16))
 
-        # Product Details
-        story.append(Paragraph("Product Details", heading_style))
-        story.append(Spacer(1, 10))
-
-        product_data = [
-            ['Model No:', machine_model_no or 'N/A', 'Sr. No. / Mfg:', machine_serial_no or 'N/A']
-        ]
-        
-        product_table = Table(product_data, colWidths=[1.5*inch, 2*inch, 1.5*inch, 1.5*inch])
-        product_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        story.append(product_table)
-        story.append(Spacer(1, 20))
-
-        # Complaint section
-        story.append(Paragraph("Complaint:", heading_style))
-        story.append(Paragraph(report.problem or "No complaint specified", normal_style))
-        story.append(Spacer(1, 100))  # Space for writing
-
-        # Observation/Action section
-        story.append(Paragraph("Observation / Action:", heading_style))
-        story.append(Paragraph(report.solution or "No action specified", normal_style))
-        story.append(Spacer(1, 100))  # Space for writing
-
-        # Service person name
-        if report.service_person_name:
-            story.append(Spacer(1, 50))
-            story.append(Paragraph(f"Service Engineer: {report.service_person_name}", normal_style))
-
-        # Build PDF
         doc.build(story)
         buffer.seek(0)
-        
         return buffer
-        
+
     except Exception as e:
         print(f"PDF generation error: {str(e)}")
         raise Exception(f"Error generating PDF: {str(e)}")
+
 
 async def get_service_report_detail(
     db: Session,
@@ -659,8 +622,7 @@ async def get_service_report_detail(
          .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
          .outerjoin(Type, Machine.type_id == Type.id)\
          .outerjoin(SoldMachine, and_(
-             SoldMachine.machine_id == ServiceReport.machine_id,
-             SoldMachine.user_id == ServiceReport.user_id
+             SoldMachine.machine_id == ServiceReport.machine_id
          ))\
          .filter(ServiceReport.id == report_id)\
          .first()

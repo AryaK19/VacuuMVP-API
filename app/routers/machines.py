@@ -6,7 +6,8 @@ from app.db.session import get_db
 from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse, MachineUpdateResponse
 from app.middleware.auth import require_admin, require_any_role
 from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine, update_machine_details
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE
+from app.helper.machines import get_model_no_by_part_no
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE, MACHINE_MODEL_FROM_PART
 
 router = APIRouter(tags=["Machines"])
 
@@ -65,11 +66,11 @@ async def create_pump(
     part_no: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: Any = Depends(require_admin)
+    current_user: Any = Depends(require_any_role)
 ):
     """
     Create a new pump machine with optional file upload.
-    Only accessible by admin users.
+    Accessible by admin and distributor users.
     """
     machine_data = {
         "serial_no": serial_no,
@@ -225,4 +226,22 @@ async def update_machine_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update machine: {str(e)}"
         )
+
+@router.get(MACHINE_MODEL_FROM_PART, response_model=dict)
+async def get_model_no_from_part_no(
+    part_no: str = Query(..., description="Part number to look up"),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get the model_no for a given part_no.
+    Accessible by admin and distributor users.
+    """
+    model_no = await get_model_no_by_part_no(part_no=part_no, db=db)
+    if not model_no:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Model number not found for the given part number"
+        )
+    return {"model_no": model_no}
 

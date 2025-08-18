@@ -76,7 +76,6 @@ class SoldMachine(Base):
     __tablename__ = "sold_machines"
     
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Added user_id field
     machine_id = Column(UUID(as_uuid=True), ForeignKey("machines.id"), nullable=False)
     
     customer_name = Column(String(255))
@@ -87,7 +86,6 @@ class SoldMachine(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    user = relationship("User", back_populates="sold_machines")  # Added relationship to User
     machine = relationship("Machine", back_populates="sold_info")
     # Added relationship to ServiceReport
     
@@ -112,7 +110,7 @@ class User(Base):
     # Relationships
     role = relationship("Role", back_populates="users")
     service_reports = relationship("ServiceReport", back_populates="user")
-    sold_machines = relationship("SoldMachine", back_populates="user")  # Added relationship to SoldMachine
+   
     
     def __repr__(self):
         return f"<User {self.email}>"

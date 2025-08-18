@@ -6,11 +6,11 @@ import json
 from app.external_service.pdf_service import PDFService
 from app.db import models
 from app.db.session import get_db
-from app.schema.service_report import ServiceReportCreateResponse, PaginatedServiceReportResponse, SoldMachineCreateRequest, SoldMachineCreateResponse
+from app.schema.service_report import ServiceReportCreateResponse, PaginatedServiceReportResponse, SoldMachineCreateRequest, SoldMachineCreateResponse, ServiceReportDetailResponse
 from app.middleware.auth import require_any_role, get_current_user
-from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no, create_customer_record, get_service_report_detail_pdf
+from app.helper.service_report import create_service_report, get_user_service_reports, get_machine_by_serial_no, create_customer_record, get_service_report_detail_pdf, get_service_report_detail
 from app.db.models import User
-from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE, SERVICE_REPORT_CUSTOMER, SERVICE_REPORT_PDF
+from app.config.route_config import SERVICE_REPORTS, SERVICE_REPORTS_TYPES, SERVICE_REPORTS_MACHINE, SERVICE_REPORT_CUSTOMER, SERVICE_REPORT_PDF, SERVICE_REPORT_DETAILS
 from io import BytesIO
 router = APIRouter(tags=["Service Reports"])
 
@@ -86,6 +86,24 @@ async def get_my_service_reports(
         page=page,
         limit=limit
     )
+
+
+@router.get(SERVICE_REPORT_DETAILS, response_model=ServiceReportDetailResponse)
+async def get_service_report_details(
+    report_id: str = Path(..., description="Service report ID"),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_any_role)
+):
+    """
+    Get detailed information about a specific service report.
+    Shows complete service report details including user, machine, and service information.
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_service_report_detail(db=db, report_id=report_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 
 @router.get(SERVICE_REPORTS_TYPES)
 async def get_service_types(

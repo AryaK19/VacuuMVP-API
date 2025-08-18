@@ -12,10 +12,10 @@ MACHINE_DETAILS = '/machines/details/{id}'
 MACHINE_SERVICE_REPORTS = '/machines/{id}/service-reports'
 MACHINE_DELETE = '/machines/{id}/delete'
 MACHINE_UPDATE = '/machines/{id}/update'
-
+MACHINE_MODEL_FROM_PART = '/machines/model-from-part'
 
 USERS_ADMINS = '/users/admins'
-USERS_distributors = '/users/distributors'
+USERS_DISTRIBUTORS = '/users/distributors'
 USER_DELETE = '/users/{id}/delete'
 
 
@@ -23,7 +23,7 @@ SERVICE_REPORTS = '/service-reports'
 SERVICE_REPORTS_TYPES = '/service-reports/types'
 SERVICE_REPORTS_MACHINE = '/service-reports/machine/{serial_no}'
 SERVICE_REPORT_CUSTOMER = '/service-reports/customer'
-
+SERVICE_REPORT_DETAILS = '/service-reports/{report_id}/details'
 SERVICE_REPORT_PDF = '/service-reports/{report_id}/pdf'
 
 
