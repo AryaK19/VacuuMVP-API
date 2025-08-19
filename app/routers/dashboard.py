@@ -6,13 +6,13 @@ from typing import Optional, Any
 
 from app.db.session import get_db
 
-from app.middleware.auth import require_any_role
+from app.middleware.auth import require_any_role, require_admin
 
 from app.external_service.pdf_service import PDFService
-from app.schema.dashboard import PaginatedRecentActivitiesResponse, DashboardStatsResponse, ServiceTypeStatsResponse, PumpNumberStatsResponse
+from app.schema.dashboard import PaginatedRecentActivitiesResponse, DashboardStatsResponse, ServiceTypeStatsResponse, PumpNumberStatsResponse, CustomerMachineStatsResponse
 
 
-from app.helper.dashboard import get_recent_activities, get_dashboard_statistics, get_service_type_statistics, get_part_number_statistics
+from app.helper.dashboard import get_recent_activities, get_dashboard_statistics, get_service_type_statistics, get_part_number_statistics, get_customer_machine_statistics
 
 
 
@@ -79,7 +79,6 @@ async def get_recent_service_activities(
 
 
 
-
 @router.get("/dashboard/part-number-statistics", response_model=PumpNumberStatsResponse)
 async def get_part_number_stats(
     db: Session = Depends(get_db),
@@ -97,6 +96,18 @@ async def get_part_number_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
+@router.get("/dashboard/customer-machines", response_model=CustomerMachineStatsResponse)
+async def get_customer_machine_stats(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Get customer machine statistics for dashboard.
+    Returns count of machines for each customer.
+    Accessible by any authenticated user.
+    """
+    try:
+        return await get_customer_machine_statistics(db=db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

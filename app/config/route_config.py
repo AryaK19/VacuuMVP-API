@@ -13,6 +13,7 @@ MACHINE_SERVICE_REPORTS = '/machines/{id}/service-reports'
 MACHINE_DELETE = '/machines/{id}/delete'
 MACHINE_UPDATE = '/machines/{id}/update'
 MACHINE_MODEL_FROM_PART = '/machines/model-from-part'
+MACHINE_CUSTOMERS = '/machines/customers'
 
 USERS_ADMINS = '/users/admins'
 USERS_DISTRIBUTORS = '/users/distributors'
@@ -25,6 +26,7 @@ SERVICE_REPORTS_MACHINE = '/service-reports/machine/{serial_no}'
 SERVICE_REPORT_CUSTOMER = '/service-reports/customer'
 SERVICE_REPORT_DETAILS = '/service-reports/{report_id}/details'
 SERVICE_REPORT_PDF = '/service-reports/{report_id}/pdf'
+
 
 
 DASHBOARD_STATS = '/dashboard/stats'

@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 
 from app.db.session import get_db
-from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse, MachineUpdateResponse
+from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse, MachineUpdateResponse, CustomerInfoListResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine, update_machine_details
+from app.helper.machines import get_machines_by_type, create_machine_by_type, get_machine_details, get_machine_service_reports, delete_machine, update_machine_details, get_unique_customers_info
 from app.helper.machines import get_model_no_by_part_no
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE, MACHINE_MODEL_FROM_PART
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE, MACHINE_MODEL_FROM_PART, MACHINE_CUSTOMERS
+
+from app.db.models import SoldMachine
 
 router = APIRouter(tags=["Machines"])
 
@@ -244,4 +246,14 @@ async def get_model_no_from_part_no(
             detail="Model number not found for the given part number"
         )
     return {"model_no": model_no}
+
+@router.get(MACHINE_CUSTOMERS, response_model=CustomerInfoListResponse)
+async def get_unique_customers(
+    search: Optional[str] = Query(None, description="Search customer name"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get unique customer info from sold_machines table, optionally filtered by search (ilike).
+    """
+    return await get_unique_customers_info(db=db, search=search)
 

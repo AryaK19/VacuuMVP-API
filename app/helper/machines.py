@@ -1,11 +1,13 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import uuid
 
 from app.db import models
 from app.external_service.aws_service import AWSService
+
+from app.schema.machine import CustomerInfo, CustomerInfoListResponse
 
 
 async def get_machines_by_type(
@@ -617,4 +619,37 @@ async def get_model_no_by_part_no(part_no: str, db):
     return None
 
 
+from sqlalchemy import func
 
+async def get_unique_customers_info(
+    db: Session,
+    search: Optional[str] = None
+) -> CustomerInfoListResponse:
+    """
+    Get unique customer info from sold_machines table, optionally filtered by search (ilike).
+    Uniqueness is based on trimmed, lowercased customer_name.
+    """
+    query = db.query(
+        func.max(func.trim(models.SoldMachine.customer_name)).label("customer_name"),
+        func.max(models.SoldMachine.customer_contact).label("customer_contact"),
+        func.max(models.SoldMachine.customer_address).label("customer_address"),
+        func.max(models.SoldMachine.customer_email).label("customer_email")
+    ).filter(models.SoldMachine.customer_name.isnot(None))
+    if search:
+        query = query.filter(models.SoldMachine.customer_name.ilike(f"%{search}%"))
+    results = (
+        query
+        .group_by(func.lower(func.trim(models.SoldMachine.customer_name)))
+        .all()
+    )
+    customers = []
+    for row in results:
+        if row.customer_name and row.customer_name.strip():
+            customers.append(CustomerInfo(
+                customer_name=row.customer_name.strip(),
+                customer_contact=row.customer_contact,
+                customer_address=row.customer_address,
+                customer_email=row.customer_email
+            ))
+
+    return CustomerInfoListResponse(customers=customers)

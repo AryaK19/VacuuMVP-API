@@ -13,7 +13,9 @@ from app.schema.dashboard import (
     ServiceTypeStatsResponse,
     ServiceTypeStatsItem,
     PumpNumberStatsResponse,
-    PumpNumberStatsItem
+    PumpNumberStatsItem,
+    CustomerMachineStats,
+    CustomerMachineStatsResponse
 )
 from app.external_service.aws_service import AWSService
 
@@ -228,5 +230,43 @@ async def get_part_number_statistics(db: Session) -> PumpNumberStatsResponse:
     except Exception as e:
         print(f"Pump number statistics error: {str(e)}")
         raise Exception(f"Error fetching pump number statistics: {str(e)}")
+
+
+
+async def get_customer_machine_statistics(db: Session) -> CustomerMachineStatsResponse:
+    """
+    Get customer machine statistics for dashboard.
+    Returns count of sold machines for each unique customer name (case-insensitive, trimmed).
+    """
+    try:
+        from sqlalchemy import func
+
+        customer_stats_query = db.query(
+            func.max(SoldMachine.customer_name).label('customer_name_display'),
+            func.count(SoldMachine.machine_id).label('machine_count')
+        ).filter(
+            SoldMachine.customer_name.isnot(None),
+            func.length(func.trim(SoldMachine.customer_name)) > 0
+        ).group_by(
+            func.lower(func.trim(SoldMachine.customer_name))
+        ).order_by(
+            func.max(SoldMachine.customer_name).asc()
+        ).limit(10)
+
+        results = customer_stats_query.all()
+
+        customer_statistics = []
+        for row in results:
+            stat_item = CustomerMachineStats(
+                customer_name=row.customer_name_display,
+                machine_count=row.machine_count
+            )
+            customer_statistics.append(stat_item)
+
+        return CustomerMachineStatsResponse(customer_statistics=customer_statistics)
+
+    except Exception as e:
+        print(f"Customer machine statistics error: {str(e)}")
+        raise Exception(f"Error fetching customer machine statistics: {str(e)}")
 
 

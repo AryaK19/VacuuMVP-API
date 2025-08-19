@@ -635,6 +635,7 @@ async def get_service_report_detail(
         # Query with all joins to get complete information including customer data
         result = db.query(
             ServiceReport,
+            Role.role_name.label('user_role'),
             User.name.label('user_name'),
             User.email.label('user_email'),
             ServiceType.service_type.label('service_type_name'),
@@ -649,6 +650,7 @@ async def get_service_report_detail(
             SoldMachine.customer_address.label('customer_address'),
             SoldMachine.created_at.label('sold_date')
         ).join(User, ServiceReport.user_id == User.id)\
+         .join(Role, User.role_id == Role.id)\
          .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)\
          .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
          .outerjoin(Type, Machine.type_id == Type.id)\
@@ -661,14 +663,18 @@ async def get_service_report_detail(
         if not result:
             raise Exception("Service report not found")
         
-        (report, user_name, user_email, service_type_name, 
+        (report, user_role , user_name, user_email, service_type_name, 
          machine_serial_no, machine_model_no, machine_part_no, 
          machine_manufacturing_date, machine_type_name,
          customer_name, customer_email, customer_contact, 
          customer_address, sold_date) = result
         
-        # Use name as display name, fallback to email
-        display_name = user_name or user_email or "Unknown User"
+        
+
+        if user_role == "admin":
+            display_name = "Brand Scientific"
+        else:
+            display_name = user_name or user_email or "Unknown User"
         
         # Create machine info object
         machine_info = None

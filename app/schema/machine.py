@@ -127,3 +127,16 @@ class MachineUpdateResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class CustomerInfo(BaseModel):
+    customer_name: str
+    customer_contact: Optional[str] = None
+    customer_address: Optional[str] = None
+    customer_email: Optional[str] = None
+
+class CustomerInfoListResponse(BaseModel):
+    customers: List[CustomerInfo]
+
+    class Config:
+        orm_mode = True

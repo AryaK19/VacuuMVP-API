@@ -76,3 +76,18 @@ class PumpNumberStatsResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class CustomerMachineStats(BaseModel):
+    customer_name: str
+    machine_count: int
+
+    class Config:
+        orm_mode = True
+
+
+class CustomerMachineStatsResponse(BaseModel):
+    customer_statistics: List[CustomerMachineStats] = []
+
+    class Config:
+        orm_mode = True
