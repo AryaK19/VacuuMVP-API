@@ -501,7 +501,8 @@ async def get_service_report_detail_pdf(
         # Service Report Details Table
         details_data = [
             ["Service Type", Paragraph(f"<b>{service_type_name or 'N/A'}</b>", normal), "Service Person", user_name or "N/A"],
-            ["Problem", report.problem or "N/A", "Solution", report.solution or "N/A"]
+            ["Problem", report.problem or "N/A"], 
+            ["Solution", report.solution or "N/A"]
         ]
         details_table = Table(details_data, colWidths=[80, 150, 80, 150])
         details_table.setStyle(TableStyle([
@@ -522,8 +523,8 @@ async def get_service_report_detail_pdf(
         # Customer Info Table
         customer_data = [
             ["Customer Name", customer_name or "N/A", "Contact", customer_contact or "N/A"],
-            ["Email", customer_email or "N/A", "Purchase Date", sold_date.strftime('%m/%d/%Y, %I:%M:%S %p') if sold_date else "N/A"],
-            ["Address", customer_address or "N/A", "", ""]
+           
+            # ["Address", customer_address or "N/A", "", ""]
         ]
         customer_table = Table(customer_data, colWidths=[80, 150, 80, 150])
         customer_table.setStyle(TableStyle([
@@ -532,8 +533,23 @@ async def get_service_report_detail_pdf(
             ('VALIGN', (0,0), (-1,-1), 'TOP'),
             ('ALIGN', (0,0), (-1,-1), 'LEFT'),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
         ]))
+
+        # Address row: 2 columns, same total width as customer_table (80+150+80+150=460)
+        customer_address = [["Address", customer_address or "N/A"], ["Email", customer_email or "N/A"],]
+        customer_address_table = Table(customer_address, colWidths=[80, 380])
+        customer_address_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+
         story.append(customer_table)
+        story.append(customer_address_table)
         story.append(Spacer(1, 16))
 
         # Machine Information Header
@@ -544,8 +560,21 @@ async def get_service_report_detail_pdf(
         machine_data = [
             ["Serial No", machine_serial_no or "N/A", "Model No", machine_model_no or "N/A"],
             ["Part No", machine_part_no or "N/A", "Type", machine_type_name or "N/A"],
-            ["Manufacturing Date", str(machine_manufacturing_date) if machine_manufacturing_date else "Not specified", "", ""]
+            
         ]
+
+        machine_data_manufacturing = [
+            ["Manufacturing Date", str(machine_manufacturing_date) if machine_manufacturing_date else "Not specified"]
+        ]
+        machine_data_manufacturing_table = Table(machine_data_manufacturing, colWidths=[80, 380])
+        machine_data_manufacturing_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
         machine_table = Table(machine_data, colWidths=[80, 150, 80, 150])
         machine_table.setStyle(TableStyle([
             ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
@@ -553,8 +582,11 @@ async def get_service_report_detail_pdf(
             ('VALIGN', (0,0), (-1,-1), 'TOP'),
             ('ALIGN', (0,0), (-1,-1), 'LEFT'),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            # Add faint grid
+            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
         ]))
         story.append(machine_table)
+        story.append(machine_data_manufacturing_table)
         story.append(Spacer(1, 16))
 
         # Service Parts Header
@@ -562,14 +594,13 @@ async def get_service_report_detail_pdf(
         story.append(Spacer(1, 6))
 
         # Service Parts Table
-        parts_data = [["Serial No", "Model No", "Part No", "Quantity", "Added At"]]
+        parts_data = [[ "Part No", "Model No",  "Quantity"]]
         for part, part_serial_no, part_model_no, part_part_no in parts:
             parts_data.append([
-                part_serial_no or "N/A",
-                part_model_no or "N/A",
                 part_part_no or "N/A",
-                str(part.quantity),
-                part.created_at.strftime('%m/%d/%Y, %I:%M:%S %p') if part.created_at else "N/A"
+                part_model_no or "N/A",
+                str(part.quantity)
+     
             ])
         parts_table = Table(parts_data, colWidths=[70, 120, 80, 50, 110])
         parts_table.setStyle(TableStyle([
