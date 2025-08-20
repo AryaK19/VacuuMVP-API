@@ -4,22 +4,22 @@ from datetime import date, datetime
 import uuid
 
 class MachineBase(BaseModel):
-    serial_no: str
     model_no: str
     part_no: Optional[str] = None
-    date_of_manufacturing: Optional[date] = None
+    
 
 class SoldMachineBase(BaseModel):
+    serial_no: str
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None
     customer_address: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
 
 class MachineCreate(MachineBase):
     file_key: Optional[str] = None  # Added file_key for machine creation
 
 class MachineCreateRequest(BaseModel):
-    serial_no: str
     model_no: str
     part_no: Optional[str] = None
     file_key: Optional[str] = None
@@ -35,19 +35,22 @@ class MachineCreateResponse(BaseModel):
 
 class SoldMachineCreate(SoldMachineBase):
     machine_id: str
+    serial_no: str
 
 class MachineUpdate(BaseModel):
-    serial_no: Optional[str] = None
+   
     model_no: Optional[str] = None
     part_no: Optional[str] = None
     type_id: Optional[str] = None
-    date_of_manufacturing: Optional[date] = None
+   
 
 class SoldMachineUpdate(BaseModel):
+    serial_no: Optional[str] = None
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None
     customer_address: Optional[str] = None
+    date_of_manufacturing: Optional[date] = None
 
 class SoldMachineInDB(SoldMachineBase):
     id: Union[str, uuid.UUID]
@@ -130,6 +133,7 @@ class MachineUpdateResponse(BaseModel):
 
 
 class CustomerInfo(BaseModel):
+    customer_company: str
     customer_name: str
     customer_contact: Optional[str] = None
     customer_address: Optional[str] = None

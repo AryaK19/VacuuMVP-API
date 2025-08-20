@@ -55,16 +55,16 @@ async def create_service_report(
             )
 
         # Validate machine exists if machine_id is provided
-        machine = None
-        if service_report_data.get("machine_id"):
-            machine = db.query(models.Machine).filter(
-                models.Machine.id == service_report_data["machine_id"]
+        sold_machine = None
+        if service_report_data.get("sold_machine_id"):
+            sold_machine = db.query(models.SoldMachine).filter(
+                models.SoldMachine.id == service_report_data["sold_machine_id"]
             ).first()
             
-            if not machine:
+            if not sold_machine:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Machine not found"
+                    detail="Sold machine not found"
                 )
 
 
@@ -72,14 +72,13 @@ async def create_service_report(
         new_service_report = models.ServiceReport(
             id=uuid.uuid4(),
             user_id=user_id,
-            machine_id=service_report_data.get("machine_id"),
+            sold_machine_id=service_report_data.get("sold_machine_id"),
             problem=service_report_data.get("problem"),
             solution=service_report_data.get("solution"),
             service_person_name=service_report_data.get("service_person_name"),
             service_type_id=service_report_data["service_type_id"]
         )
 
-        print("this is done ")
 
         db.add(new_service_report)
         db.flush()  # Flush to get the ID
@@ -146,6 +145,8 @@ async def create_service_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create service report: {str(e)}"
         )
+    
+
 
 async def get_user_service_reports(
     user_id: str,
@@ -158,7 +159,7 @@ async def get_user_service_reports(
 ) -> Dict[str, Any]:
     """
     Helper function to get service reports for a specific user.
-    Search works across service_person_name, machine serial/model/part no, and service type.
+    Search works across service_person_name, serial/model/part no (from sold_machine/machine), and service type.
     """
     # Get user and check admin
     user = db.query(models.User).filter(models.User.id == user_id).first()
@@ -168,7 +169,8 @@ async def get_user_service_reports(
 
     # Start query with necessary joins for search
     query = db.query(models.ServiceReport) \
-        .outerjoin(models.Machine, models.ServiceReport.machine_id == models.Machine.id) \
+        .outerjoin(models.SoldMachine, models.ServiceReport.sold_machine_id == models.SoldMachine.id) \
+        .outerjoin(models.Machine, models.SoldMachine.machine_id == models.Machine.id) \
         .outerjoin(models.ServiceType, models.ServiceReport.service_type_id == models.ServiceType.id)
 
     # Filter by user_id only if not admin
@@ -182,7 +184,7 @@ async def get_user_service_reports(
             (models.ServiceReport.service_person_name.ilike(search_term)) |
             (models.ServiceReport.problem.ilike(search_term)) |
             (models.ServiceReport.solution.ilike(search_term)) |
-            (models.Machine.serial_no.ilike(search_term)) |
+            (models.SoldMachine.serial_no.ilike(search_term)) |
             (models.Machine.model_no.ilike(search_term)) |
             (models.Machine.part_no.ilike(search_term)) |
             (models.ServiceType.service_type.ilike(search_term))
@@ -226,15 +228,19 @@ async def get_user_service_reports(
     }
 
 
-
 def build_service_report_response(service_report: models.ServiceReport, db: Session) -> Dict[str, Any]:
     """
     Helper function to build service report response with related data
     """
+    # Get sold_machine and machine
+    sold_machine = service_report.sold_machine
+    machine = sold_machine.machine if sold_machine else None
+
     return {
         "id": str(service_report.id),
         "user_id": str(service_report.user_id),
-        "machine_id": str(service_report.machine_id) if service_report.machine_id else None,
+        "machine_id": str(machine.id) if machine.id else None,
+        "sold_machine_id": str(sold_machine.id) if sold_machine else None,
         "problem": service_report.problem,
         "solution": service_report.solution,
         "service_person_name": service_report.service_person_name,
@@ -246,11 +252,11 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
             "service_type": service_report.service_type.service_type
         } if service_report.service_type else None,
         "machine": {
-            "id": str(service_report.machine.id),
-            "serial_no": service_report.machine.serial_no,
-            "model_no": service_report.machine.model_no,
-            "part_no": service_report.machine.part_no
-        } if service_report.machine else None,
+            "id": str(machine.id),
+            "serial_no": sold_machine.serial_no if sold_machine else None,
+            "model_no": machine.model_no if machine else None,
+            "part_no": machine.part_no if machine else None
+        } if machine else None,
         "parts": [
             {
                 "id": str(part.id),
@@ -270,9 +276,11 @@ def build_service_report_response(service_report: models.ServiceReport, db: Sess
                 "created_at": file.created_at,
                 "updated_at": file.updated_at
             }
-            for file in service_report.service_report_files  # Changed from .files to .service_report_files
+            for file in service_report.service_report_files
         ]
     }
+
+
 
 async def get_machine_by_serial_no(
     serial_no: str,
@@ -283,10 +291,17 @@ async def get_machine_by_serial_no(
     """
     try:
         # Find machine by serial number
+
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.serial_no == serial_no
+        ).first()
+
+
+
         machine = db.query(models.Machine).join(
             models.Type, models.Machine.type_id == models.Type.id
         ).filter(
-            models.Machine.serial_no == serial_no,
+            models.Machine.id == sold_machine.machine_id if sold_machine else None,
             models.Type.type.ilike('%pump%')
         ).first()
         
@@ -296,10 +311,8 @@ async def get_machine_by_serial_no(
                 detail=f"Machine with serial number '{serial_no}' not found"
             )
         
-        # Get sold machine info if available
-        sold_machine = db.query(models.SoldMachine).filter(
-            models.SoldMachine.machine_id == machine.id
-        ).first()
+    
+
         
         # Generate presigned URL for machine file if exists
         file_url = None
@@ -313,12 +326,13 @@ async def get_machine_by_serial_no(
             "success": True,
             "machine": {
                 "machine_id": str(machine.id),
-                "serial_no": machine.serial_no,
+                "serial_no": sold_machine.serial_no if sold_machine else None,
                 "model_no": machine.model_no,
                 "part_no": machine.part_no,
                 "sold_machine_id": str(sold_machine.id) if sold_machine else None,
-                "date_of_manufacturing": machine.date_of_manufacturing,
+                "date_of_manufacturing": sold_machine.date_of_manufacturing,
                 "customer_name": sold_machine.customer_name if sold_machine else None,
+                "customer_company": sold_machine.customer_company if sold_machine else None,
                 "customer_contact": sold_machine.customer_contact if sold_machine else None,
                 "customer_email": sold_machine.customer_email if sold_machine else None,
                 "customer_address": sold_machine.customer_address if sold_machine else None,
@@ -335,6 +349,10 @@ async def get_machine_by_serial_no(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve machine information: {str(e)}"
         )
+
+
+
+
 
 async def create_customer_record(
     customer_data: Dict[str, Any],
@@ -372,6 +390,7 @@ async def create_customer_record(
             id=uuid.uuid4(),
             machine_id=customer_data["machine_id"],
             customer_name=customer_data["customer_name"],
+            customer_company=customer_data.get("customer_company"),
             customer_contact=customer_data.get("customer_contact"),
             customer_email=customer_data.get("customer_email"),
             customer_address=customer_data.get("customer_address")
@@ -418,55 +437,29 @@ async def get_service_report_detail_pdf(
     """
     Generate a PDF service report matching the web layout, with logo at top right.
     """
-    print("this is being created")
+ 
     try:
-        result = db.query(
-            ServiceReport,
-            User.name.label('user_name'),
-            User.email.label('user_email'),
-            ServiceType.service_type.label('service_type_name'),
-            Machine.serial_no.label('machine_serial_no'),
-            Machine.model_no.label('machine_model_no'),
-            Machine.part_no.label('machine_part_no'),
-            Machine.date_of_manufacturing.label('machine_manufacturing_date'),
-            Type.type.label('machine_type_name'),
-            SoldMachine.customer_name.label('customer_name'),
-            SoldMachine.customer_email.label('customer_email'),
-            SoldMachine.customer_contact.label('customer_contact'),
-            SoldMachine.customer_address.label('customer_address'),
-            SoldMachine.created_at.label('sold_date')
-        ).join(User, ServiceReport.user_id == User.id)\
-         .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)\
-         .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
-         .outerjoin(Type, Machine.type_id == Type.id)\
-         .outerjoin(SoldMachine, SoldMachine.machine_id == ServiceReport.machine_id)\
-         .filter(ServiceReport.id == report_id)\
-         .first()
-        
-        if not result:
-            raise Exception("Service report not found")
-        
-        (report, user_name, user_email, service_type_name, 
-         machine_serial_no, machine_model_no, machine_part_no, 
-         machine_manufacturing_date, machine_type_name,
-         customer_name, customer_email, customer_contact, 
-         customer_address, sold_date) = result
+        def clean_text(val):
+            if not val:
+                return "N/A"
+            return str(val).strip().replace('\n', ' ').replace('\r', ' ')
 
-        # Fetch service parts for this report
-        parts = db.query(
-            ServiceReportPart,
-            Machine.serial_no.label('part_serial_no'),
-            Machine.model_no.label('part_model_no'),
-            Machine.part_no.label('part_part_no')
-        ).join(Machine, ServiceReportPart.machine_id == Machine.id)\
-         .filter(ServiceReportPart.service_report_id == report_id)\
-         .all()
+        result = await get_service_report_detail(report_id=report_id, db=db)
+        
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
         styles = getSampleStyleSheet()
         normal = styles['Normal']
         bold = styles['Heading4']
+
+        # Add a smaller font style for the address
+        small_address = ParagraphStyle(
+            'small_address',
+            parent=normal,
+            fontSize=8,   # or any size you prefer
+            leading=9
+        )
 
         story = []
 
@@ -478,7 +471,7 @@ async def get_service_report_detail_pdf(
         # Make sure the path is absolute and normalized
         logo_path = os.path.abspath(logo_path)
         try:
-            logo = RLImage(logo_path, width=80, height=15)
+            logo = RLImage(logo_path, width=90, height=15)
         except Exception:
             logo = None
 
@@ -500,9 +493,10 @@ async def get_service_report_detail_pdf(
 
         # Service Report Details Table
         details_data = [
-            ["Service Type", Paragraph(f"<b>{service_type_name or 'N/A'}</b>", normal), "Service Person", user_name or "N/A"],
-            ["Problem", report.problem or "N/A"], 
-            ["Solution", report.solution or "N/A"]
+            ["Service Type", Paragraph(f"<b>{result.service_type_name or 'N/A'}</b>", normal),"Distributor", Paragraph(f"<b>{result.user_name or 'N/A'}</b>", normal) ],
+            ["Service Person", clean_text(result.service_person_name or "N/A"), "Date", result.created_at.strftime("%d-%m-%Y") if result.created_at else "N/A"],
+            ["Problem", clean_text(result.problem)],
+            ["Solution", clean_text(result.solution)]
         ]
         details_table = Table(details_data, colWidths=[80, 150, 80, 150])
         details_table.setStyle(TableStyle([
@@ -522,9 +516,8 @@ async def get_service_report_detail_pdf(
 
         # Customer Info Table
         customer_data = [
-            ["Customer Name", customer_name or "N/A", "Contact", customer_contact or "N/A"],
-           
-            # ["Address", customer_address or "N/A", "", ""]
+            ["Customer Company", clean_text(result.customer_info.customer_company), "Customer Name", clean_text(result.customer_info.customer_name)],
+            ["Email", clean_text(result.customer_info.customer_email), "Contact Number", clean_text(result.customer_info.customer_contact)]
         ]
         customer_table = Table(customer_data, colWidths=[80, 150, 80, 150])
         customer_table.setStyle(TableStyle([
@@ -537,7 +530,8 @@ async def get_service_report_detail_pdf(
         ]))
 
         # Address row: 2 columns, same total width as customer_table (80+150+80+150=460)
-        customer_address = [["Address", customer_address or "N/A"], ["Email", customer_email or "N/A"],]
+        address_text = (result.customer_info.customer_address or "N/A").strip().replace('\n', '<br/>')
+        customer_address = [["Address", Paragraph(address_text, small_address)]]
         customer_address_table = Table(customer_address, colWidths=[80, 380])
         customer_address_table.setStyle(TableStyle([
             ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
@@ -558,13 +552,13 @@ async def get_service_report_detail_pdf(
 
         # Machine Info Table
         machine_data = [
-            ["Serial No", machine_serial_no or "N/A", "Model No", machine_model_no or "N/A"],
-            ["Part No", machine_part_no or "N/A", "Type", machine_type_name or "N/A"],
+            ["Serial No", result.machine_info.serial_no or "N/A", "Model No", result.machine_info.model_no or "N/A"],
+            ["Part No", result.machine_info.part_no or "N/A", "Type", result.machine_info.type_name or "N/A"],
             
         ]
 
         machine_data_manufacturing = [
-            ["Manufacturing Date", str(machine_manufacturing_date) if machine_manufacturing_date else "Not specified"]
+            ["Manufacturing Date", str(result.machine_info.date_of_manufacturing) if result.machine_info.date_of_manufacturing else "Not specified"]
         ]
         machine_data_manufacturing_table = Table(machine_data_manufacturing, colWidths=[80, 380])
         machine_data_manufacturing_table.setStyle(TableStyle([
@@ -595,13 +589,14 @@ async def get_service_report_detail_pdf(
 
         # Service Parts Table
         parts_data = [[ "Part No", "Model No",  "Quantity"]]
-        for part, part_serial_no, part_model_no, part_part_no in parts:
+        for part_info in result.parts:
             parts_data.append([
-                part_part_no or "N/A",
-                part_model_no or "N/A",
-                str(part.quantity)
-     
+                part_info.machine_part_no or "N/A",
+                part_info.machine_model_no or "N/A",
+                str(part_info.quantity)
             ])
+
+
         parts_table = Table(parts_data, colWidths=[70, 120, 80, 50, 110])
         parts_table.setStyle(TableStyle([
             ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
@@ -624,6 +619,8 @@ async def get_service_report_detail_pdf(
         raise Exception(f"Error generating PDF: {str(e)}")
 
 
+
+
 async def get_service_report_detail(
     db: Session,
     report_id: str
@@ -639,12 +636,13 @@ async def get_service_report_detail(
             User.name.label('user_name'),
             User.email.label('user_email'),
             ServiceType.service_type.label('service_type_name'),
-            Machine.serial_no.label('machine_serial_no'),
             Machine.model_no.label('machine_model_no'),
             Machine.part_no.label('machine_part_no'),
-            Machine.date_of_manufacturing.label('machine_manufacturing_date'),
             Type.type.label('machine_type_name'),
+            SoldMachine.serial_no.label('machine_serial_no'),
+            SoldMachine.date_of_manufacturing.label('machine_manufacturing_date'),
             SoldMachine.customer_name.label('customer_name'),
+            SoldMachine.customer_company.label('customer_company'),
             SoldMachine.customer_email.label('customer_email'),
             SoldMachine.customer_contact.label('customer_contact'),
             SoldMachine.customer_address.label('customer_address'),
@@ -652,11 +650,9 @@ async def get_service_report_detail(
         ).join(User, ServiceReport.user_id == User.id)\
          .join(Role, User.role_id == Role.id)\
          .join(ServiceType, ServiceReport.service_type_id == ServiceType.id)\
-         .outerjoin(Machine, ServiceReport.machine_id == Machine.id)\
+         .outerjoin(SoldMachine, SoldMachine.id == ServiceReport.sold_machine_id)\
+         .outerjoin(Machine, SoldMachine.machine_id == Machine.id)\
          .outerjoin(Type, Machine.type_id == Type.id)\
-         .outerjoin(SoldMachine, and_(
-             SoldMachine.machine_id == ServiceReport.machine_id
-         ))\
          .filter(ServiceReport.id == report_id)\
          .first()
         
@@ -664,12 +660,10 @@ async def get_service_report_detail(
             raise Exception("Service report not found")
         
         (report, user_role , user_name, user_email, service_type_name, 
-         machine_serial_no, machine_model_no, machine_part_no, 
-         machine_manufacturing_date, machine_type_name,
-         customer_name, customer_email, customer_contact, 
+         machine_model_no, machine_part_no,  machine_type_name, machine_serial_no,
+         machine_manufacturing_date, 
+         customer_name, customer_company, customer_email, customer_contact, 
          customer_address, sold_date) = result
-        
-        
 
         if user_role == "admin":
             display_name = "Brand Scientific"
@@ -693,6 +687,7 @@ async def get_service_report_detail(
             customer_info = ServiceReportCustomerInfo(
                 customer_name=customer_name,
                 customer_email=customer_email,
+                customer_company=customer_company,
                 customer_contact=customer_contact,
                 customer_address=customer_address,
                 sold_date=sold_date
@@ -706,7 +701,6 @@ async def get_service_report_detail(
         # Get service report parts with machine details
         report_parts = db.query(
             ServiceReportPart,
-            Machine.serial_no.label('part_machine_serial_no'),
             Machine.model_no.label('part_machine_model_no'),
             Machine.part_no.label('part_machine_part_no')
         ).join(Machine, ServiceReportPart.machine_id == Machine.id)\
@@ -720,17 +714,13 @@ async def get_service_report_detail(
         files_info = []
         for file_record in report_files:
             try:
-                # Try to generate presigned URL for secure access
                 url_result = aws_service.get_presigned_url(file_record.file_key, expires_in=3600)
-                
                 if url_result["success"]:
                     file_url = url_result["url"]
                 else:
-                    # Fallback to direct URL if presigned URL fails
                     bucket_name = aws_service.bucket_name
                     region = aws_service.region
                     file_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{file_record.file_key}"
-                
                 file_info = ServiceReportFileInfo(
                     id=str(file_record.id),
                     file_key=file_record.file_key,
@@ -738,20 +728,17 @@ async def get_service_report_detail(
                     created_at=file_record.created_at
                 )
                 files_info.append(file_info)
-                
             except Exception as file_error:
                 print(f"Error processing file {file_record.file_key}: {str(file_error)}")
-                # Continue with other files even if one fails
                 continue
         
         # Process parts information
         parts_info = []
         for part_result in report_parts:
-            part_record, part_serial_no, part_model_no, part_part_no = part_result
-            
+            part_record, part_model_no, part_part_no = part_result
             part_info = ServiceReportPartInfo(
                 id=str(part_record.id),
-                machine_serial_no=part_serial_no,
+                machine_serial_no=None,  # Serial no is not in Machine anymore
                 machine_model_no=part_model_no,
                 machine_part_no=part_part_no,
                 quantity=part_record.quantity,

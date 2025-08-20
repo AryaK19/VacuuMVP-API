@@ -1,101 +1,78 @@
 DB VacuuMVP
 
-
 1) users
-	id
-	user_id ( supabase user auth id) 
-	role_id
-	name 
-	phone_number
-	created_at
-	updated_at
-
+    id (UUID, PK)
+    user_id (UUID, unique, supabase user auth id)
+    role_id (UUID, FK -> role.id, nullable)
+    name (string, nullable)
+    phone_number (string, nullable)
+    email (string, unique, nullable)
+    password (string)
+    is_active (boolean, default=True)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
 2) role
-	id
-	role_name (admin, distributor)
-	created_at
-	updated_at
-
+    id (UUID, PK)
+    role_name (string, not null, e.g. admin, distributor)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
 3) type
-	id
-	type (initially we have pumps, parts) 
-	created_at
-	updated_at
+    id (UUID, PK)
+    type (string, not null, e.g. pumps, parts)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
 4) service_types
-	id 
-	service_type (varchar) ( Paid, Health Check, Warranty, AMC ) 
+    id (UUID, PK)
+    service_type (string, not null, e.g. Paid, Health Check, Warranty, AMC)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
-5) service_report 
-	id
-	user_id (users.id)
-	machine_id
-	
-	problem
-	solution
-	service_person_name
-	service_type_id
-		
-	
-	created_at
-	updated_at
+5) machines
+    id (UUID, PK)
+    serial_no (string, not null, unique)
+    model_no (string, not null)
+    part_no (string, nullable)
+    type_id (UUID, FK -> type.id)
+    file_key (string, nullable)
+    date_of_manufacturing (date, nullable)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
+6) sold_machines
+    id (UUID, PK)
+    machine_id (UUID, FK -> machines.id, not null)
+    customer_name (string, nullable)
+    customer_contact (string, nullable)
+    customer_email (string, nullable)
+    customer_address (text, nullable)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
-	
+7) service_report
+    id (UUID, PK)
+    user_id (UUID, FK -> users.id)
+    machine_id (UUID, FK -> machines.id)
+    service_type_id (UUID, FK -> service_types.id)
+    problem (text, nullable)
+    solution (text, nullable)
+    service_person_name (string, nullable)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
-	
-6) service_report_parts
-	service_report_id
-	machine_id (here type= part)
+8) service_report_parts
+    id (UUID, PK)
+    service_report_id (UUID, FK -> service_report.id)
+    machine_id (UUID, FK -> machines.id)
+    quantity (integer, default=1)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)
 
-	quantity
-	
-
-7) service_report_files
-	id 
-	service_report_id
-	file_key
-
-
-
-
-8) machines
-	id
-	serial_no
-
-
-	model_no (varchar) 
-	part_no 
-
-	type_id
-	
-	created_at
-	updated_at
-	date_of_manufacturing (year/month) 
-
-	file_key
-
-
-
-9) sold_machines
-	id
-	user_id
-
-	machine_id (machines.id)
-	
-
-
-	customer_name
-	customer_contact
-	customer_email
-	customer_address
-
-
-
-
-
-
-
-
+9) service_report_files
+    id (UUID, PK)
+    service_report_id (UUID, FK -> service_report.id)
+    file_key (string, not null)
+    created_at (datetime, auto)
+    updated_at (datetime, auto)

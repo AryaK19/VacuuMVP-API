@@ -1,0 +1,71 @@
+sudo nano /etc/nginx/sites-available/vacuubrand
+
+server {
+    listen 80;
+    server_name vacuubrand.blue2green.me;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+sudo nano /etc/nginx/sites-available/api-vacuubrand
+
+server {
+    listen 80;
+    server_name api.vacuubrand.blue2green.me;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+sudo ln -s /etc/nginx/sites-available/vacuubrand /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/api-vacuubrand /etc/nginx/sites-enabled/
+
+
+sudo nano /etc/systemd/system/vacuu-backend.service
+
+[Unit]
+Description=VacuuMVP FastAPI Backend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/vacuuMVP/vacuumvp-api
+
+# Install dependencies before starting
+ExecStartPre=/root/vacuuMVP/vacuumvp-api/venv/bin/pip install -r requirements.txt
+
+# Start FastAPI
+ExecStart=/root/vacuuMVP/vacuumvp-api/venv/bin/python -m app.main
+
+Restart=always
+RestartSec=5
+Environment="PATH=/root/vacuuMVP/vacuumvp-api/venv/bin"
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable vacuu-backend
+sudo systemctl start vacuu-backend
+sudo journalctl -u vacuu-backend -f
+
+
+
+pm2 start "npm run preview -- --port 3000 --host 0.0.0.0" --name vacuumvp
+
+
+

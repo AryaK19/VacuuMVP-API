@@ -135,6 +135,7 @@ class ServiceReportFileInfo(BaseModel):
 # Customer information from sold machines
 class ServiceReportCustomerInfo(BaseModel):
     customer_name: Optional[str] = None
+    customer_company: Optional[str] = None
     customer_email: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_address: Optional[str] = None

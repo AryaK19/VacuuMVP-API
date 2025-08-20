@@ -9,7 +9,6 @@ from app.external_service.aws_service import AWSService
 
 from app.schema.machine import CustomerInfo, CustomerInfoListResponse
 
-
 async def get_machines_by_type(
     type_name: str,
     db: Session,
@@ -20,7 +19,7 @@ async def get_machines_by_type(
     limit: int = 10
 ) -> Dict[str, Any]:
     """
-    Helper function to get machines by type with filtering, sorting, and pagination
+    Helper function to get only sold machines by type with filtering, sorting, and pagination
     """
     # Get the type_id for the given type_name
     type_obj = db.query(models.Type).filter(models.Type.type == type_name).first()
@@ -30,17 +29,108 @@ async def get_machines_by_type(
             detail=f"Type '{type_name}' not found"
         )
 
-    # Build base query with joins for search
-    base_query = db.query(models.Machine) \
-        .outerjoin(models.SoldMachine) \
-        .join(models.Type) \
-        .filter(models.Machine.type_id == type_obj.id)
+    # Build base query: INNER JOIN to only get machines that are sold
+    base_query = db.query(models.Machine).join(models.Type).filter(
+        models.Machine.type_id == type_obj.id
+    )
 
-    # Apply search filter if provided
+    # Apply search filter if provided (serial_no now from SoldMachine)
     if search:
         search_term = f"%{search}%"
         base_query = base_query.filter(
-            (models.Machine.serial_no.ilike(search_term)) |
+            (models.Machine.model_no.ilike(search_term)) |
+            (models.Machine.part_no.ilike(search_term))
+        )
+
+    # Get all matching machine IDs (distinct)
+    machine_ids_query = base_query.with_entities(models.Machine.id)
+    machine_ids = [str(row.id) for row in machine_ids_query.distinct().all()]
+    total_items = len(machine_ids)
+
+    # Sorting in Python since we can't sort by other columns in DISTINCT subquery
+    if hasattr(models.Machine, sort_by):
+        sort_attr = sort_by
+    else:
+        sort_attr = "created_at"
+
+    reverse = sort_order.lower() == "desc"
+
+    # Fetch all machines for these IDs
+    if not machine_ids:
+        machines = []
+    else:
+        machines = db.query(models.Machine).filter(models.Machine.id.in_(machine_ids)).all()
+        # Sort machines in Python
+        machines = sorted(
+            machines,
+            key=lambda m: getattr(m, sort_attr) or "",
+            reverse=reverse
+        )
+        # Paginate in Python
+        machines = machines[(page - 1) * limit : page * limit]
+
+    # Pagination metadata
+    has_next = (page * limit) < total_items
+    has_previous = page > 1
+
+    # Prepare response with machine type info and sold info
+    result_machines = []
+    for machine in machines:
+
+        machine_dict = {
+            "id": str(machine.id),
+            "model_no": machine.model_no,
+            "part_no": machine.part_no,
+            "type_id": str(machine.type_id),
+            "created_at": machine.created_at,
+            "updated_at": machine.updated_at,
+            "machine_type": {
+                "id": str(machine.machine_type.id),
+                "type": machine.machine_type.type
+            }
+        }
+        result_machines.append(machine_dict)
+
+    return {
+        "total": total_items,
+        "page": page,
+        "limit": limit,
+        "has_next": has_next,
+        "has_previous": has_previous,
+        "items": result_machines
+    }
+
+
+async def get_sold_machines_by_type(
+    type_name: str,
+    db: Session,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
+    page: int = 1,
+    limit: int = 10
+) -> Dict[str, Any]:
+    """
+    Helper function to get only sold machines by type with filtering, sorting, and pagination
+    """
+    # Get the type_id for the given type_name
+    type_obj = db.query(models.Type).filter(models.Type.type == type_name).first()
+    if not type_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Type '{type_name}' not found"
+        )
+
+    # Build base query: INNER JOIN to only get machines that are sold
+    base_query = db.query(models.Machine).join(models.SoldMachine).join(models.Type).filter(
+        models.Machine.type_id == type_obj.id
+    )
+
+    # Apply search filter if provided (serial_no now from SoldMachine)
+    if search:
+        search_term = f"%{search}%"
+        base_query = base_query.filter(
+            (models.SoldMachine.serial_no.ilike(search_term)) |
             (models.Machine.model_no.ilike(search_term)) |
             (models.Machine.part_no.ilike(search_term)) |
             (models.SoldMachine.customer_name.ilike(search_term)) |
@@ -81,35 +171,41 @@ async def get_machines_by_type(
     # Prepare response with machine type info and sold info
     result_machines = []
     for machine in machines:
+        sold_info = None
+        serial_no = ""
+        date_of_manufacturing = None
+        if hasattr(machine, "sold_info") and machine.sold_info:
+            sold_info = {
+                "id": str(machine.sold_info.id),
+                "machine_id": str(machine.sold_info.machine_id),
+                "serial_no": machine.sold_info.serial_no,
+                "customer_company": machine.sold_info.customer_company,
+                "customer_name": machine.sold_info.customer_name,
+                "customer_contact": machine.sold_info.customer_contact,
+                "customer_email": machine.sold_info.customer_email,
+                "customer_address": machine.sold_info.customer_address,
+                "date_of_manufacturing": machine.sold_info.date_of_manufacturing,
+                "created_at": machine.sold_info.created_at,
+                "updated_at": machine.sold_info.updated_at
+            }
+            serial_no = machine.sold_info.serial_no or ""
+            date_of_manufacturing = machine.sold_info.date_of_manufacturing
+
         machine_dict = {
             "id": str(machine.id),
-            "serial_no": machine.serial_no,
+            "serial_no": serial_no,  # Always a string
             "model_no": machine.model_no,
             "part_no": machine.part_no,
             "type_id": str(machine.type_id),
             "created_at": machine.created_at,
             "updated_at": machine.updated_at,
-            "date_of_manufacturing": machine.date_of_manufacturing,
+            "date_of_manufacturing": date_of_manufacturing,
             "machine_type": {
                 "id": str(machine.machine_type.id),
                 "type": machine.machine_type.type
             },
-            "sold_info": None
+            "sold_info": sold_info
         }
-        # Add sold machine info if available
-        if hasattr(machine, "sold_info") and machine.sold_info:
-            sold_info = {
-                "id": str(machine.sold_info.id),
-                "machine_id": str(machine.sold_info.machine_id),
-                "customer_name": machine.sold_info.customer_name,
-                "customer_contact": machine.sold_info.customer_contact,
-                "customer_email": machine.sold_info.customer_email,
-                "customer_address": machine.sold_info.customer_address,
-                "created_at": machine.sold_info.created_at,
-                "updated_at": machine.sold_info.updated_at
-            }
-            machine_dict["sold_info"] = sold_info
-
         result_machines.append(machine_dict)
 
     return {
@@ -120,6 +216,7 @@ async def get_machines_by_type(
         "has_previous": has_previous,
         "items": result_machines
     }
+
 
 
 
@@ -142,13 +239,13 @@ async def create_machine_by_type(
 
     # Check if machine with same serial number already exists
     existing_machine = db.query(models.Machine).filter(
-        models.Machine.serial_no == machine_data["serial_no"]
+        models.Machine.part_no == machine_data["part_no"]
     ).first()
     
     if existing_machine:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Machine with serial number '{machine_data['serial_no']}' already exists"
+            detail=f"Machine with Part number '{machine_data['part_no']}' already exists"
         )
 
     file_key = None
@@ -161,7 +258,7 @@ async def create_machine_by_type(
             # Upload file to S3 using machine serial number as a unique identifier
             upload_result = aws_service.upload_file(
                 file=file.file,
-                folder=f"machines/{machine_data['serial_no']}",
+                folder=f"machines/{machine_data['part_no']}",
                 content_type=file.content_type,
                 file_name=file.filename
             )
@@ -183,7 +280,6 @@ async def create_machine_by_type(
     # Create new machine
     new_machine = models.Machine(
         id=uuid.uuid4(),
-        serial_no=machine_data["serial_no"],
         model_no=machine_data["model_no"],
         part_no=machine_data.get("part_no"),
         type_id=type_obj.id,
@@ -200,7 +296,6 @@ async def create_machine_by_type(
             "message": f"{type_name.capitalize()} created successfully",
             "machine": {
                 "id": str(new_machine.id),
-                "serial_no": new_machine.serial_no,
                 "model_no": new_machine.model_no,
                 "part_no": new_machine.part_no,
                 "type_id": str(new_machine.type_id),
@@ -219,8 +314,79 @@ async def create_machine_by_type(
         )
 
 
-async def get_machine_details(
-    machine_id: str,
+
+async def create_sold_machine(
+    machine_data: Dict[str, Any],
+    db: Session,
+    file = None
+) -> Dict[str, Any]:
+    """
+    Helper function to create a sold machine with specific type and optional file upload
+    """
+
+    # Check if machine with same serial number already exists
+    existing_machine = db.query(models.SoldMachine).filter(
+        models.SoldMachine.serial_no == machine_data.get("serial_no")
+    ).first()
+
+    machine = db.query(models.Machine).filter(
+        models.Machine.part_no == machine_data.get("part_no")
+    ).first()
+
+    if existing_machine:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Sold Machine with Serial number '{machine_data['serial_no']}' already exists"
+        )
+
+
+
+    # Create new sold machine
+    new_sold_machine = models.SoldMachine(
+        id=uuid.uuid4(),
+        serial_no=machine_data.get("serial_no"),
+        machine_id=machine.id,
+        customer_company=machine_data.get("customer_company"),
+        customer_name=machine_data.get("customer_name"),
+        customer_contact=machine_data.get("customer_contact"),
+        customer_email=machine_data.get("customer_email"),
+        customer_address=machine_data.get("customer_address"),
+        date_of_manufacturing=machine_data.get("date_of_manufacturing"),
+    )
+
+    try:
+        db.add(new_sold_machine)
+        db.commit()
+        db.refresh(new_sold_machine)
+
+        return {
+            "success": True,
+            "message": f"Sold Machine created successfully",
+            "machine": {
+                "id": str(new_sold_machine.id),
+                "serial_no": new_sold_machine.serial_no,
+                "machine_id": str(new_sold_machine.machine_id),
+                "customer_company": new_sold_machine.customer_company,
+                "customer_name": new_sold_machine.customer_name,
+                "customer_contact": new_sold_machine.customer_contact,
+                "customer_email": new_sold_machine.customer_email,
+                "customer_address": new_sold_machine.customer_address,
+                "date_of_manufacturing": new_sold_machine.date_of_manufacturing,
+                "created_at": new_sold_machine.created_at,
+                "updated_at": new_sold_machine.updated_at
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create sold machine: {str(e)}"
+        )
+
+
+async def get_sold_machine_details(
+    sold_machine_id: str,
     db: Session
 ) -> Dict[str, Any]:
     """
@@ -228,20 +394,22 @@ async def get_machine_details(
     """
     try:
         # Get machine by ID
+
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.id == sold_machine_id
+        ).first()
+
         machine = db.query(models.Machine).filter(
-            models.Machine.id == machine_id
+            models.Machine.id == sold_machine.machine_id
         ).first()
         
         if not machine:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Machine with ID '{machine_id}' not found"
+                detail=f"Machine with Sold ID '{sold_machine_id}' not found"
             )
         
-        # Get sold machine info if available
-        sold_machine = db.query(models.SoldMachine).filter(
-            models.SoldMachine.machine_id == machine.id
-        ).first()
+
         
         # Generate presigned URL for machine file if exists
         file_url = None
@@ -250,15 +418,19 @@ async def get_machine_details(
             url_result = aws_service.get_presigned_url(machine.file_key)
             if url_result["success"]:
                 file_url = url_result["url"]
-        
+
+        # serial_no and date_of_manufacturing now come from sold_machine
+        serial_no = sold_machine.serial_no if sold_machine else ""
+        date_of_manufacturing = sold_machine.date_of_manufacturing if sold_machine else None
+
         return {
             "success": True,
             "machine": {
                 "id": str(machine.id),
-                "serial_no": machine.serial_no,
+                "serial_no": serial_no,
                 "model_no": machine.model_no,
                 "part_no": machine.part_no,
-                "date_of_manufacturing": machine.date_of_manufacturing,
+                "date_of_manufacturing": date_of_manufacturing,
                 "file_url": file_url,
                 "created_at": machine.created_at,
                 "updated_at": machine.updated_at,
@@ -268,17 +440,21 @@ async def get_machine_details(
                 },
                 "sold_info": {
                     "id": str(sold_machine.id),
+                    "serial_no": sold_machine.serial_no,
+                    "customer_company": sold_machine.customer_company,
                     "customer_name": sold_machine.customer_name,
                     "customer_contact": sold_machine.customer_contact,
                     "customer_email": sold_machine.customer_email,
                     "customer_address": sold_machine.customer_address,
+                    "date_of_manufacturing": sold_machine.date_of_manufacturing,
                     "created_at": sold_machine.created_at,
                     "updated_at": sold_machine.updated_at,
+                    # Add user info if you have a user relationship in SoldMachine
                     "user": {
                         "id": str(sold_machine.user.id),
                         "name": sold_machine.user.name,
                         "email": sold_machine.user.email
-                    } if sold_machine.user else None
+                    } if hasattr(sold_machine, "user") and sold_machine.user else None
                 } if sold_machine else None,
                 "is_sold": bool(sold_machine)
             }
@@ -293,7 +469,7 @@ async def get_machine_details(
         )
 
 async def get_machine_service_reports(
-    machine_id: str,
+    sold_machine_id: str,
     db: Session,
     search: Optional[str] = None,
     sort_by: Optional[str] = "created_at",
@@ -302,23 +478,24 @@ async def get_machine_service_reports(
     limit: int = 10
 ) -> Dict[str, Any]:
     """
-    Helper function to get service reports for a specific machine with pagination
+    Helper function to get service reports for a specific sold machine with pagination
     """
     try:
-        # Verify machine exists
-        machine = db.query(models.Machine).filter(
-            models.Machine.id == machine_id
+        # Verify sold machine exists
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.id == sold_machine_id
         ).first()
-        
-        if not machine:
+        if not sold_machine:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Machine with ID '{machine_id}' not found"
+                detail=f"Sold machine with ID '{sold_machine_id}' not found"
             )
+
+        machine = sold_machine.machine
 
         # Start building the query
         query = db.query(models.ServiceReport).filter(
-            models.ServiceReport.machine_id == machine_id
+            models.ServiceReport.sold_machine_id == sold_machine_id
         )
 
         # Apply search filter if provided
@@ -385,11 +562,11 @@ async def get_machine_service_reports(
             "items": service_reports_data,
             "machine": {
                 "id": str(machine.id),
-                "serial_no": machine.serial_no,
+                "serial_no": sold_machine.serial_no,
                 "model_no": machine.model_no
             }
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -398,67 +575,58 @@ async def get_machine_service_reports(
             detail=f"Failed to retrieve machine service reports: {str(e)}"
         )
 
+
 async def delete_machine(
-    machine_id: str,
+    sold_machine_id: str,
     db: Session
 ) -> Dict[str, Any]:
     """
-    Helper function to delete a machine with cascade deletion
+    Helper function to delete a sold machine (and cascade service reports/files), but NOT the machine itself
     """
     try:
-        # Get machine by ID
-        machine = db.query(models.Machine).filter(
-            models.Machine.id == machine_id
+        # Get sold machine by ID
+        sold_machine = db.query(models.SoldMachine).filter(
+            models.SoldMachine.id == sold_machine_id
         ).first()
         
-        if not machine:
+        if not sold_machine:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Machine with ID '{machine_id}' not found"
+                detail=f"Sold machine with ID '{sold_machine_id}' not found"
             )
 
-        # Store machine info for response
+        machine = sold_machine.machine
+
+        # Store info for response
         machine_info = {
             "id": str(machine.id),
-            "serial_no": machine.serial_no,
+            "serial_no": sold_machine.serial_no,
             "model_no": machine.model_no,
             "type": machine.machine_type.type
         }
 
-        # Delete related files from S3 if machine has a file
-        if machine.file_key:
-            try:
-                aws_service = AWSService()
-                aws_service.delete_file(machine.file_key)
-            except Exception as e:
-                print(f"Warning: Failed to delete machine file from S3: {str(e)}")
-
-        # Delete service report files from S3 for related service reports
-        service_reports = db.query(models.ServiceReport).filter(
-            models.ServiceReport.machine_id == machine_id
-        ).all()
-        
-        for report in service_reports:
+        # Delete all related service report files and parts
+        for report in sold_machine.service_reports:
+            # Delete service report files from S3 and DB
             for file_record in report.service_report_files:
                 try:
                     aws_service = AWSService()
                     aws_service.delete_file(file_record.file_key)
                 except Exception as e:
                     print(f"Warning: Failed to delete service report file from S3: {str(e)}")
+                db.delete(file_record)
+            # Delete service report parts
+            for part in report.parts:
+                db.delete(part)
+            db.delete(report)
 
-        # Database will handle cascade deletion due to foreign key constraints
-        # The following will be automatically deleted:
-        # - SoldMachine records (via foreign key)
-        # - ServiceReport records (via foreign key)
-        # - ServiceReportPart records (via foreign key to service reports)
-        # - ServiceReportFiles records (via foreign key to service reports)
-        
-        db.delete(machine)
+        # Delete the sold machine (now safe, all children are deleted)
+        db.delete(sold_machine)
         db.commit()
 
         return {
             "success": True,
-            "message": f"Machine {machine_info['serial_no']} and all related data deleted successfully",
+            "message": f"Sold machine {machine_info['serial_no']} and all related data deleted successfully",
             "deleted_machine": machine_info
         }
         
@@ -468,11 +636,13 @@ async def delete_machine(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete machine: {str(e)}"
+            detail=f"Failed to delete sold machine: {str(e)}"
         )
 
+
+
 async def update_machine_details(
-    machine_id: str,
+    sold_machine_id: str,
     machine_data: Dict[str, Any],
     db: Session,
     file = None
@@ -594,7 +764,7 @@ async def update_machine_details(
             db.refresh(sold_machine)
 
         # Get updated machine details and add the required message field
-        machine_details = await get_machine_details(machine_id, db)
+        machine_details = await get_sold_machine_details(sold_machine_id=sold_machine.id, db=db)
         machine_details["message"] = "Machine updated successfully"
         
         return machine_details
@@ -607,6 +777,12 @@ async def update_machine_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update machine: {str(e)}"
         )
+
+
+
+
+
+
 
 async def get_model_no_by_part_no(part_no: str, db):
     """
@@ -630,22 +806,24 @@ async def get_unique_customers_info(
     Uniqueness is based on trimmed, lowercased customer_name.
     """
     query = db.query(
+        func.max(func.trim(models.SoldMachine.customer_company)).label("customer_company"),
         func.max(func.trim(models.SoldMachine.customer_name)).label("customer_name"),
         func.max(models.SoldMachine.customer_contact).label("customer_contact"),
         func.max(models.SoldMachine.customer_address).label("customer_address"),
         func.max(models.SoldMachine.customer_email).label("customer_email")
     ).filter(models.SoldMachine.customer_name.isnot(None))
     if search:
-        query = query.filter(models.SoldMachine.customer_name.ilike(f"%{search}%"))
+        query = query.filter(models.SoldMachine.customer_company.ilike(f"%{search}%"))
     results = (
         query
-        .group_by(func.lower(func.trim(models.SoldMachine.customer_name)))
+        .group_by(func.lower(func.trim(models.SoldMachine.customer_company)))
         .all()
     )
     customers = []
     for row in results:
-        if row.customer_name and row.customer_name.strip():
+        if row.customer_company and row.customer_company.strip():
             customers.append(CustomerInfo(
+                customer_company=row.customer_company.strip(),
                 customer_name=row.customer_name.strip(),
                 customer_contact=row.customer_contact,
                 customer_address=row.customer_address,
