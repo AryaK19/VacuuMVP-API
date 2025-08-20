@@ -516,7 +516,7 @@ async def get_service_report_detail_pdf(
 
         # Customer Info Table
         customer_data = [
-            ["Customer Company", clean_text(result.customer_info.customer_company), "Customer Name", clean_text(result.customer_info.customer_name)],
+            ["Customer", clean_text(result.customer_info.customer_company), "Contact Person", clean_text(result.customer_info.customer_name)],
             ["Email", clean_text(result.customer_info.customer_email), "Contact Number", clean_text(result.customer_info.customer_contact)]
         ]
         customer_table = Table(customer_data, colWidths=[80, 150, 80, 150])
@@ -666,7 +666,7 @@ async def get_service_report_detail(
          customer_address, sold_date) = result
 
         if user_role == "admin":
-            display_name = "Brand Scientific"
+            display_name = "BRAND Scientific Equipment PVT. LTD."
         else:
             display_name = user_name or user_email or "Unknown User"
         

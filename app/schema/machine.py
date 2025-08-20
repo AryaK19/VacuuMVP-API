@@ -12,6 +12,7 @@ class SoldMachineBase(BaseModel):
     serial_no: str
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
+    customer_company: Optional[str] = None
     customer_email: Optional[str] = None
     customer_address: Optional[str] = None
     date_of_manufacturing: Optional[date] = None

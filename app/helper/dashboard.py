@@ -33,7 +33,7 @@ async def get_dashboard_statistics(db: Session) -> DashboardStatsResponse:
         
         # Get sold vs available machines
         total_machines = db.query(Machine).count()
-        sold_machines_count = db.query(SoldMachine.machine_id).distinct().count()
+        sold_machines_count = db.query(SoldMachine.id).distinct().count()
         available_machines = total_machines - sold_machines_count
         
         # Get current month's service reports
@@ -56,6 +56,11 @@ async def get_dashboard_statistics(db: Session) -> DashboardStatsResponse:
     except Exception as e:
         print(f"Dashboard statistics error: {str(e)}")
         raise Exception(f"Error fetching dashboard statistics: {str(e)}")
+
+
+
+
+
 
 async def get_service_type_statistics(db: Session) -> ServiceTypeStatsResponse:
     """
@@ -96,6 +101,9 @@ async def get_service_type_statistics(db: Session) -> ServiceTypeStatsResponse:
     except Exception as e:
         print(f"Service type statistics error: {str(e)}")
         raise Exception(f"Error fetching service type statistics: {str(e)}")
+
+
+
 
 async def get_recent_activities(
     db: Session,
@@ -201,12 +209,13 @@ async def get_part_number_statistics(db: Session) -> PumpNumberStatsResponse:
     Returns count of service reports for each part number along with model number.
     """
     try:
-        # Query to get part_no, model_no and count of service reports
+        # Join ServiceReport -> SoldMachine -> Machine
         pump_stats_query = db.query(
             Machine.part_no,
             Machine.model_no,
             func.count(ServiceReport.id).label('service_count')
-        ).outerjoin(ServiceReport, ServiceReport.machine_id == Machine.id)\
+        ).join(SoldMachine, SoldMachine.machine_id == Machine.id)\
+         .join(ServiceReport, ServiceReport.sold_machine_id == SoldMachine.id)\
          .filter(Machine.part_no.isnot(None))\
          .group_by(Machine.part_no, Machine.model_no)\
          .order_by(desc(func.count(ServiceReport.id)))
@@ -232,7 +241,6 @@ async def get_part_number_statistics(db: Session) -> PumpNumberStatsResponse:
         raise Exception(f"Error fetching pump number statistics: {str(e)}")
 
 
-
 async def get_customer_machine_statistics(db: Session) -> CustomerMachineStatsResponse:
     """
     Get customer machine statistics for dashboard.
@@ -242,15 +250,15 @@ async def get_customer_machine_statistics(db: Session) -> CustomerMachineStatsRe
         from sqlalchemy import func
 
         customer_stats_query = db.query(
-            func.max(SoldMachine.customer_name).label('customer_name_display'),
+            func.max(SoldMachine.customer_company).label('customer_company'),
             func.count(SoldMachine.machine_id).label('machine_count')
         ).filter(
-            SoldMachine.customer_name.isnot(None),
-            func.length(func.trim(SoldMachine.customer_name)) > 0
+            SoldMachine.customer_company.isnot(None),
+            func.length(func.trim(SoldMachine.customer_company)) > 0
         ).group_by(
-            func.lower(func.trim(SoldMachine.customer_name))
+            func.lower(func.trim(SoldMachine.customer_company))
         ).order_by(
-            func.max(SoldMachine.customer_name).asc()
+            func.max(SoldMachine.customer_company).asc()
         ).limit(10)
 
         results = customer_stats_query.all()
@@ -258,7 +266,7 @@ async def get_customer_machine_statistics(db: Session) -> CustomerMachineStatsRe
         customer_statistics = []
         for row in results:
             stat_item = CustomerMachineStats(
-                customer_name=row.customer_name_display,
+                customer_name=row.customer_company,
                 machine_count=row.machine_count
             )
             customer_statistics.append(stat_item)

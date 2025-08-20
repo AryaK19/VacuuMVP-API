@@ -5,9 +5,9 @@ from typing import Optional, Any, Dict, List
 from app.db.session import get_db
 from app.schema.machine import PaginatedMachineResponse, MachineCreateRequest, MachineCreateResponse, MachineDetailsResponse, MachineUpdateResponse, CustomerInfoListResponse
 from app.middleware.auth import require_admin, require_any_role
-from app.helper.machines import get_sold_machines_by_type, create_machine_by_type, get_sold_machine_details, get_machine_service_reports, delete_machine, update_machine_details, get_unique_customers_info, get_machines_by_type, create_sold_machine
+from app.helper.machines import get_sold_machines_by_type, create_machine_by_type, get_sold_machine_details, get_machine_service_reports, delete_machine, update_machine_details, get_unique_customers_info, get_machines_by_type, create_sold_machine, delete_sold_machine
 from app.helper.machines import get_model_no_by_part_no
-from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_SOLD_PUMPS,MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS,MACHINE_SOLD_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE, MACHINE_MODEL_FROM_PART, MACHINE_CUSTOMERS, MACHINES_CREATE_SOLD_PUMP
+from app.config.route_config import MACHINES_PUMPS, MACHINES_PARTS, MACHINES_SOLD_PUMPS,MACHINES_CREATE_PUMP, MACHINES_CREATE_PART, MACHINE_DETAILS,MACHINE_SOLD_DETAILS, MACHINE_SERVICE_REPORTS, MACHINE_DELETE, MACHINE_UPDATE, MACHINE_MODEL_FROM_PART, MACHINE_CUSTOMERS, MACHINES_CREATE_SOLD_PUMP, MACHINE_DELETE_SOLD_PUMPS
 
 from app.db.models import SoldMachine
 
@@ -112,6 +112,31 @@ async def create_pump(
     )
 
 
+@router.post(MACHINES_CREATE_PART, response_model=MachineCreateResponse)
+async def create_part(
+    model_no: str = Form(...),
+    part_no: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Create a new part machine with optional file upload.
+    Only accessible by admin users.
+    """
+    machine_data = {
+        "model_no": model_no,
+        "part_no": part_no
+    }
+    
+    return await create_machine_by_type(
+        type_name="part",
+        machine_data=machine_data,
+        db=db,
+        file=file
+    )
+
+
 
 
 @router.post(MACHINES_CREATE_SOLD_PUMP, response_model=MachineCreateResponse)
@@ -152,31 +177,6 @@ async def create_sold_pump(
     )
 
 
-
-
-@router.post(MACHINES_CREATE_PART, response_model=MachineCreateResponse)
-async def create_part(
-    model_no: str = Form(...),
-    part_no: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
-    current_user: Any = Depends(require_admin)
-):
-    """
-    Create a new part machine with optional file upload.
-    Only accessible by admin users.
-    """
-    machine_data = {
-        "model_no": model_no,
-        "part_no": part_no
-    }
-    
-    return await create_machine_by_type(
-        type_name="part",
-        machine_data=machine_data,
-        db=db,
-        file=file
-    )
 
 
 
@@ -223,7 +223,7 @@ async def get_machine_service_reports_endpoint(
 
 
 
-@router.delete(MACHINE_DELETE)
+@router.delete(MACHINE_DELETE_SOLD_PUMPS)
 async def delete_sold_machine_endpoint(
     id: str,
     db: Session = Depends(get_db),
@@ -233,8 +233,24 @@ async def delete_sold_machine_endpoint(
     Delete a machine and all related data (service reports, sold machine info, files).
     Only accessible by admin users.
     """
-    return await delete_machine(
+    return await delete_sold_machine(
         sold_machine_id=id,
+        db=db
+    )
+
+
+@router.delete(MACHINE_DELETE)
+async def delete_machine_endpoint(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_admin)
+):
+    """
+    Delete a machine and all related data (service reports, sold machine info, files).
+    Only accessible by admin users.
+    """
+    return await delete_machine(
+        machine_id=id,
         db=db
     )
 
@@ -299,7 +315,7 @@ async def update_machine_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update machine: {str(e)}"
-        )
+)
 
 @router.get(MACHINE_MODEL_FROM_PART, response_model=dict)
 async def get_model_no_from_part_no(

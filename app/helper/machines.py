@@ -134,7 +134,8 @@ async def get_sold_machines_by_type(
             (models.Machine.model_no.ilike(search_term)) |
             (models.Machine.part_no.ilike(search_term)) |
             (models.SoldMachine.customer_name.ilike(search_term)) |
-            (models.SoldMachine.customer_email.ilike(search_term))
+            (models.SoldMachine.customer_email.ilike(search_term)) |
+            (models.SoldMachine.customer_company.ilike(search_term))
         )
 
     # Get all matching machine IDs (distinct)
@@ -576,12 +577,13 @@ async def get_machine_service_reports(
         )
 
 
-async def delete_machine(
+async def delete_sold_machine(
     sold_machine_id: str,
     db: Session
 ) -> Dict[str, Any]:
     """
     Helper function to delete a sold machine (and cascade service reports/files), but NOT the machine itself
+   
     """
     try:
         # Get sold machine by ID
@@ -637,6 +639,78 @@ async def delete_machine(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete sold machine: {str(e)}"
+        )
+    
+
+
+
+
+async def delete_machine(
+    machine_id: str,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Helper function to delete a machine and all its dependent data (sold machines, service reports, parts, files).
+    """
+    try:
+        # Get the machine by ID
+        machine = db.query(models.Machine).filter(models.Machine.id == machine_id).first()
+        if not machine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Machine with ID '{machine_id}' not found"
+            )
+
+        # Gather info for response
+        machine_info = {
+            "id": str(machine.id),
+            "model_no": machine.model_no,
+            "part_no": machine.part_no,
+            "type": machine.machine_type.type if machine.machine_type else None
+        }
+        aws_service = AWSService()
+
+        aws_service.delete_file(machine.file_key)
+
+        # Delete all sold machines and their related data
+        sold_machines = db.query(models.SoldMachine).filter(models.SoldMachine.machine_id == machine.id).all()
+        for sold_machine in sold_machines:
+            # Delete all related service reports and their files/parts
+            for report in sold_machine.service_reports:
+                # Delete service report files from S3 and DB
+                for file_record in report.service_report_files:
+                    try:
+                        
+                        aws_service.delete_file(file_record.file_key)
+                    except Exception as e:
+                        print(f"Warning: Failed to delete service report file from S3: {str(e)}")
+                    db.delete(file_record)
+                # Delete service report parts
+                for part in report.parts:
+                    db.delete(part)
+                db.delete(report)
+            db.delete(sold_machine)
+
+        # Delete all ServiceReportPart records directly linked to this machine (not via sold_machine)
+        db.query(models.ServiceReportPart).filter(models.ServiceReportPart.machine_id == machine.id).delete(synchronize_session=False)
+
+        # Finally, delete the machine itself
+        db.delete(machine)
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Machine {machine_info['model_no']} and all related data deleted successfully",
+            "deleted_machine": machine_info
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete machine: {str(e)}"
         )
 
 
